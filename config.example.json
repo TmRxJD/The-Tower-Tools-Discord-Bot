@@ -1,0 +1,9 @@
+{
+	"token": "YOUR_BOT_TOKEN_HERE",
+	"clientId": "YOUR_CLIENT_ID_HERE",
+	"guildIds": [
+		"GUILD_ID_1",
+		"GUILD_ID_2",
+		"GUILD_ID_3"
+	]
+}
