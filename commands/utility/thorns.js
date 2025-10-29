@@ -1,8 +1,6 @@
 const { SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { calculateEnemyHP, calculateEnemyDMG, parseTier, parseNumberInput, formatNumberOutput } = require('./statFinderFunctions.js');
-const fs = require('fs');
 const puppeteer = require('puppeteer');
-const path = require('path');
 const sharp = require('sharp'); 
 const { createCanvas } = require('canvas');
 const style = require('./chartFunctions/style');
@@ -310,12 +308,8 @@ async function generateChartImageCanvas(
     }
 
     // Save image
-    const outPath = path.resolve(`./thorns_chart_${Date.now()}.png`);
-    const out = fs.createWriteStream(outPath);
-    const stream = canvas.createPNGStream();
-    stream.pipe(out);
-    await new Promise(res => out.on('finish', res));
-    return outPath;
+    const buffer = canvas.toBuffer('image/png');
+    return buffer;
 }
 
 function thornsChart(baseThorns, tier, pcLevel, pcMasteryLevel, bcLabLevel, sharpFortitude = false) {
@@ -530,7 +524,7 @@ module.exports = {
                     buildEditButton(modalId),
                     buildToggleButton(sfEnabled, modalId)
                 );
-                return { files: [screenshotPath], components: [row], ephemeral: true };
+                return { files: [{ attachment: screenshotPath, name: 'thorns_chart.png' }], components: [row], ephemeral: true };
     // chartSF is only used in compare mode
             }
 
