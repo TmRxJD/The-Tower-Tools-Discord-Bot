@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Client, Collection, Events, GatewayIntentBits, MessageFlags } = require('discord.js');
 const { token } = require('./config.json');
+const Database = require('better-sqlite3');
 
 const client = new Client({ intents: [
 	GatewayIntentBits.Guilds,
@@ -13,6 +14,10 @@ const client = new Client({ intents: [
 	GatewayIntentBits.MessageContent,
 	GatewayIntentBits.GuildMembers
 ] });
+
+// Initialize analytics database
+const analyticsDb = new Database('./analytics.db');
+const insertUsage = analyticsDb.prepare('INSERT INTO command_usage (command_name, user_id, guild_id) VALUES (?, ?, ?)');
 
 client.cooldowns = new Collection();
 client.commands = new Collection();
@@ -85,6 +90,9 @@ client.on(Events.InteractionCreate, async interaction => {
 
 	timestamps.set(interaction.user.id, now);
 	setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
+
+	// Track command usage (non-blocking)
+	setImmediate(() => insertUsage.run(interaction.commandName, interaction.user.id, interaction.guild?.id));
 
 	try {
 		await command.execute(interaction);
