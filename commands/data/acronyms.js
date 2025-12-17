@@ -192,4 +192,5 @@ module.exports = {
     gl: 'Good Luck',
     rng: 'Random Number Generator',
     proc: 'Probability of Random Occurrence',
+    tourney: 'Tournament',
 };
