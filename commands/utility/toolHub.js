@@ -29,6 +29,7 @@ function createToolsEmbed() {
         "[**Vault**](https://the-tower-run-tracker.com/trackers/vault)",        "",
         "**     Other Tools:**",
         "Chart Finder **/chart**",
+        "Define Acronyms **/define**",
         "Tournament Checklist **/checklist**"
     ].join('\n');
 
@@ -64,23 +65,3 @@ module.exports = {
         }
     }
 };
-
-
-
-// Register a simple message listener for '!tools' to send the same embed
-module.exports.registerMessageListener = function registerMessageListener(client) {
-    if (!client || typeof client.on !== 'function') return;
-    client.on('messageCreate', async (message) => {
-        try {
-            if (!message || !message.content) return;
-            if (message.author && message.author.bot) return;
-            if (message.content.trim() === '!tools') {
-                const embed = createToolsEmbed();
-                await message.channel.send({ embeds: [embed] });
-            }
-        } catch (err) {
-            console.error('Error in !tools message listener:', err);
-        }
-    });
-};
-

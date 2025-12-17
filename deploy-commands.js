@@ -1,7 +1,12 @@
 const { REST, Routes } = require('discord.js');
-const { clientId, guildIds, token } = require('./config.json'); // Adjusted to support multiple guilds
+const { clientId, token } = require('./config.json'); // guild list now comes from guilds.db
 const fs = require('node:fs');
 const path = require('node:path');
+const guildStore = require('./utils/guildStore');
+
+// Ensure DB initialized and migrate existing config guilds if present
+guildStore.init();
+guildStore.migrateFromConfig(path.join(__dirname, 'config.json'));
 
 const commands = [];
 // Grab all the command folders from the commands directory
@@ -28,21 +33,23 @@ for (const folder of commandFolders) {
 // Construct and prepare an instance of the REST module
 const rest = new REST().setToken(token);
 
-// Deploy your commands to all guilds
+// Deploy your commands to all guilds recorded in the DB
 (async () => {
     try {
         console.log(`Started refreshing ${commands.length} application (/) commands.`);
-
-        // Loop through all guildIds and deploy commands for each server
+        const guildIds = guildStore.getAllGuilds();
         for (const guildId of guildIds) {
-            const data = await rest.put(
-                Routes.applicationGuildCommands(clientId, guildId),
-                { body: commands },
-            );
-            console.log(`Successfully reloaded ${data.length} application (/) commands in guild ${guildId}.`);
+            try {
+                const data = await rest.put(
+                    Routes.applicationGuildCommands(clientId, guildId),
+                    { body: commands },
+                );
+                console.log(`Successfully reloaded ${data.length} application (/) commands in guild ${guildId}.`);
+            } catch (err) {
+                console.error(`Failed to deploy commands to ${guildId}:`, err.message || err);
+            }
         }
     } catch (error) {
-        // Catch and log any errors
         console.error(error);
     }
 })();

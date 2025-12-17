@@ -6,14 +6,8 @@ const { Client, Collection, Events, GatewayIntentBits, MessageFlags } = require(
 const { token } = require('./config.json');
 const Database = require('better-sqlite3');
 
-const client = new Client({ intents: [
-	GatewayIntentBits.Guilds,
-	GatewayIntentBits.GuildMessages,
-	GatewayIntentBits.GuildMessageTyping,
-	GatewayIntentBits.GuildMessageReactions,
-	GatewayIntentBits.MessageContent,
-	GatewayIntentBits.GuildMembers
-] });
+// Use minimal intents — slash commands need only `Guilds`.
+const client = new Client({ intents: [ GatewayIntentBits.Guilds ] });
 
 // Initialize analytics database
 const analyticsDb = new Database('./analytics.db');
@@ -38,8 +32,38 @@ for (const folder of commandFolders) {
 	}
 }
 
+// Legacy message listeners removed to allow running without Message Content intent.
+
 client.once(Events.ClientReady, c => {
 	console.log(`Ready! Logged in as ${c.user.tag}`);
+});
+
+// Initialize guild store and handle guild joins
+const guildStore = require('./utils/guildStore');
+const deployGuildCommands = require('./utils/deployGuildCommands');
+
+// Initialize DB and migrate existing guild IDs from config.json (if any)
+guildStore.init();
+const migrated = guildStore.migrateFromConfig(path.join(__dirname, 'config.json'));
+if (migrated > 0) console.log(`Migrated ${migrated} guild IDs from config.json to guilds.db`);
+
+client.on('guildCreate', async (guild) => {
+	try {
+		console.log(`Joined guild ${guild.id} (${guild.name}). Adding to DB and deploying commands.`);
+		const added = guildStore.addGuild(guild.id);
+		if (added) {
+			try {
+				await deployGuildCommands.deployToGuild(guild.id);
+				console.log(`Commands deployed to ${guild.id}`);
+			} catch (err) {
+				console.error(`Error deploying commands to guild ${guild.id}:`, err);
+			}
+		} else {
+			console.log(`Guild ${guild.id} already present in guilds.db; skipping add.`);
+		}
+	} catch (err) {
+		console.error('Error handling guildCreate:', err);
+	}
 });
 
 client.on(Events.InteractionCreate, async interaction => {

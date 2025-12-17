@@ -375,21 +375,21 @@ async function listPlayers(interaction) {
         // Add regular members field
         if (filteredMembers.length > 0) {
             let memberList = '';
-            filteredMembers.forEach(member => {
-                // Check if the member still exists in the server
-                const guildMember = interaction.guild.members.cache.get(member.discord_id);
+            for (const member of filteredMembers) {
+                // Try to fetch the member on demand rather than relying on cache
+                let guildMember = null;
+                try {
+                    guildMember = await interaction.guild.members.fetch(member.discord_id);
+                } catch (e) {
+                    guildMember = null;
+                }
 
-                // Use mentions in the value field (these work fine)
-                // But use a friendly name in case the mention fails
                 const friendlyName = member.global_name || member.display_name || member.username || member.player_name || 'Unknown';
                 const displayName = guildMember ? `<@${member.discord_id}> (${friendlyName})` : `${friendlyName}`;
                 memberList += `${displayName} - ID: ${member.player_id}\n\n`;
-            });
+            }
 
-            embed.addFields({
-                name: '👥 Tracked Members',
-                value: memberList || 'No members tracked'
-            });
+            embed.addFields({ name: '👥 Tracked Members', value: memberList || 'No members tracked' });
         } else {
             embed.addFields({
                 name: '👥 Tracked Members',
