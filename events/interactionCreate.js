@@ -3,7 +3,8 @@ const { Events, MessageFlags } = require('discord.js');
 module.exports = {
 	name: Events.InteractionCreate,
 	async execute(interaction) {
-		if (!interaction.isChatInputCommand()) return;
+		// Handle both chat input (slash) commands and context menu commands
+		if (!interaction.isChatInputCommand() && !interaction.isContextMenuCommand()) return;
 
 		const command = interaction.client.commands.get(interaction.commandName);
 

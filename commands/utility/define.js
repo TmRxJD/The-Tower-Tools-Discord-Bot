@@ -70,7 +70,7 @@ module.exports = {
         }
 
         // If no linkOption, use textOption directly
-        const source = messageText ?? (textOption ?? '');
+        const source = textOption ?? '';
         const { text: expanded, changed } = expandAcronymsInText(source);
 
         try {

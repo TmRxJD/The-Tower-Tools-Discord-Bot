@@ -84,7 +84,8 @@ client.on(Events.InteractionCreate, async interaction => {
 		return;
 	}
 	
-	if (!interaction.isChatInputCommand()) return;
+	// Allow chat input (slash) and context menu commands
+	if (!interaction.isChatInputCommand() && !interaction.isContextMenuCommand()) return;
 	const command = client.commands.get(interaction.commandName);
 
 	if (!command) {
