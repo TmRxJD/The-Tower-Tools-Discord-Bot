@@ -26,6 +26,11 @@ function expandAcronymsInText(text) {
     return { text: out, changed };
 }
 
+function quoteText(text) {
+    if (!text) return '';
+    return text.split(/\r?\n/).map(line => `> ${line}`).join('\n');
+}
+
 module.exports = {
     category: 'utility',
     data: new ContextMenuCommandBuilder()
@@ -38,10 +43,11 @@ module.exports = {
             const msg = interaction.targetMessage;
             const source = msg?.content ?? '';
             const { text: expanded, changed } = expandAcronymsInText(source);
+            const quoted = quoteText(source);
             if (!changed) {
-                await interaction.reply({ content: source, ephemeral: true });
+                await interaction.reply({ content: quoted, ephemeral: true });
             } else {
-                await interaction.reply({ content: expanded, ephemeral: true });
+                await interaction.reply({ content: `${quoted}\n\n${expanded}`, ephemeral: true });
             }
         } catch (err) {
             console.error('Error in Define Acronyms (context menu):', err);

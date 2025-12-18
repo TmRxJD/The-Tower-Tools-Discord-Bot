@@ -9,6 +9,11 @@ function titleCase(str) {
     return str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
 }
 
+function quoteText(text) {
+    if (!text) return '';
+    return text.split(/\r?\n/).map(line => `> ${line}`).join('\n');
+}
+
 function expandAcronymsInText(text) {
     let changed = false;
     let out = text;
@@ -74,10 +79,11 @@ module.exports = {
         const { text: expanded, changed } = expandAcronymsInText(source);
 
         try {
+            const quoted = quoteText(source);
             if (!changed) {
-                await interaction.editReply({ content: source });
+                await interaction.editReply({ content: quoted });
             } else {
-                await interaction.editReply({ content: expanded });
+                await interaction.editReply({ content: `${quoted}\n\n${expanded}` });
             }
         } catch (err) {
             console.error('Error replying to /define:', err);
