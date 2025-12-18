@@ -177,6 +177,8 @@ module.exports = {
     msc: 'Multishot Chance',
     mst: 'Multishot Targets',
     rfc: 'Rapid Fire Chance',
+    bs: 'Bounce Shot',
+    bsr: 'Bounce Shot Range',
     bsc: 'Bounce Shot Chance',
     bst: 'Bounce Shot Targets',
     '50/50': 'Enemy damage -50%, tower deals -50% (perk)',
