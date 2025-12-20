@@ -6,6 +6,7 @@ const { Client, Collection, Events, GatewayIntentBits, MessageFlags } = require(
 const { token } = require('./config.json');
 const Database = require('better-sqlite3');
 
+const reminderScheduler = require('./commands/services/reminderScheduler');
 // Use minimal intents — slash commands need only `Guilds`.
 const client = new Client({ intents: [ GatewayIntentBits.Guilds ] });
 
@@ -16,7 +17,9 @@ const insertUsage = analyticsDb.prepare('INSERT INTO command_usage (command_name
 client.cooldowns = new Collection();
 client.commands = new Collection();
 const foldersPath = path.join(__dirname, 'commands');
-const commandFolders = fs.readdirSync(foldersPath);
+const commandFolders = fs.readdirSync(foldersPath)
+	.filter(f => fs.statSync(path.join(foldersPath, f)).isDirectory())
+	.filter(f => !['data', 'services'].includes(f));
 
 for (const folder of commandFolders) {
 	const commandsPath = path.join(foldersPath, folder);
@@ -36,6 +39,8 @@ for (const folder of commandFolders) {
 
 client.once(Events.ClientReady, c => {
 	console.log(`Ready! Logged in as ${c.user.tag}`);
+	// start reminder scheduler
+	try { reminderScheduler.startScheduler(client); } catch (e) { console.error('Failed to start reminder scheduler', e); }
 });
 
 // Initialize guild store and handle guild joins
@@ -67,6 +72,23 @@ client.on('guildCreate', async (guild) => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
+	// Diagnostic: log interaction metadata to help root-cause 'Unknown interaction'
+	try {
+		console.log('[interaction] id=%s appId=%s clientId=%s createdDeltaMs=%d pid=%d listeners=%d',
+			interaction.id,
+			interaction.applicationId,
+			client.user?.id,
+			Date.now() - (interaction.createdTimestamp || 0),
+			process.pid,
+			client.listenerCount(Events.InteractionCreate)
+		);
+		if (interaction.applicationId && client.user && interaction.applicationId !== client.user.id) {
+			console.warn('[interaction] applicationId does not match logged-in bot id; this interaction may belong to a different app.');
+		}
+	} catch (diagErr) {
+		console.error('Failed to log interaction diagnostics', diagErr);
+	}
+
 	if (interaction.isModalSubmit()) {
 		try {
 			const command = client.commands.get(interaction.customId.split('_')[0]);
@@ -109,7 +131,8 @@ client.on(Events.InteractionCreate, async interaction => {
 
 		if (now < expirationTime) {
 			const expiredTimestamp = Math.round(expirationTime / 1000);
-			return interaction.reply({ content: `Please wait, you are on a cooldown for \`${command.data.name}\`. You can use it again <t:${expiredTimestamp}:R>.`, flags: MessageFlags.Ephemeral });
+			await safeReply(interaction, { content: `Please wait, you are on a cooldown for \`${command.data.name}\`. You can use it again <t:${expiredTimestamp}:R>.`, flags: MessageFlags.Ephemeral });
+			return;
 		}
 	}
 

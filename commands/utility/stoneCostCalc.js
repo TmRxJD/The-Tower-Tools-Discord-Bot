@@ -1,5 +1,5 @@
 const { createCanvas } = require('canvas');
-const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder, AttachmentBuilder } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder, AttachmentBuilder, MessageFlags } = require('discord.js');
 const UW_DATA = require('./upgradesData/uwData.js');
 const { getUserUWSettings, saveUserUWSettings } = require('./dbHandler.js');
 const path = require('path');
@@ -1196,6 +1196,9 @@ module.exports = {
         .setName('stone')
         .setDescription('Ultimate Weapon Stone Cost Calculator'),
     async execute(interaction) {
+        // Acknowledge immediately so the interaction token stays valid while charts build
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
         // Load user state (adapted for new DB format)
         let allUWLevels = await getUserUWSettings(interaction.user.id) || {};
         let userState = {};
@@ -1306,15 +1309,13 @@ module.exports = {
                 await i.editReply({
                     embeds: [buildEmbed(state)],
                     components,
-                    files,
-                    ephemeral: true
+                    files
                 });
             } else {
                 await i.update({
                     embeds: [buildEmbed(state)],
                     components,
-                    files,
-                    ephemeral: true
+                    files
                 });
             }
         }
@@ -1329,14 +1330,7 @@ module.exports = {
             }
         }
         // Use updateReply to ensure consistent handling of embeds, components, and files
-        // Create a fake interaction object with replied = false, deferred = false for initial call
-        const fakeInitialInteraction = {
-            replied: false,
-            deferred: false,
-            update: async (opts) => interaction.reply(opts),
-            editReply: async (opts) => interaction.editReply(opts)
-        };
-        await updateReply(fakeInitialInteraction, userState, initialFiles);
+        await updateReply(interaction, userState, initialFiles);
 
         const msg = await interaction.fetchReply();
         const collector = msg.createMessageComponentCollector({ time: 15 * 60 * 1000 });

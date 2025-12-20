@@ -133,6 +133,117 @@ function createTables() {
     });
 }
 
+// Create reminders tables
+function createRemindersTables() {
+    db.run(`
+        CREATE TABLE IF NOT EXISTS userReminders (
+            userId TEXT NOT NULL,
+            reminderKey TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (userId, reminderKey)
+        )
+    `);
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS userReminderSettings (
+            userId TEXT PRIMARY KEY,
+            paused INTEGER NOT NULL DEFAULT 0
+        )
+    `);
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS userReminderSends (
+            userId TEXT NOT NULL,
+            reminderKey TEXT NOT NULL,
+            lastSent INTEGER,
+            PRIMARY KEY (userId, reminderKey)
+        )
+    `);
+}
+
+// Initialize reminders tables
+createRemindersTables();
+
+function getUserReminders(userId) {
+    return new Promise((resolve, reject) => {
+        db.all('SELECT reminderKey, enabled FROM userReminders WHERE userId = ?', [userId], (err, rows) => {
+            if (err) return reject(err);
+            const result = {};
+            if (rows) {
+                for (const r of rows) result[r.reminderKey] = !!r.enabled;
+            }
+            resolve(result);
+        });
+    });
+}
+
+function saveUserReminders(userId, remindersMap) {
+    return new Promise((resolve, reject) => {
+        db.serialize(() => {
+            const stmt = db.prepare('INSERT OR REPLACE INTO userReminders (userId, reminderKey, enabled) VALUES (?, ?, ?)');
+            for (const [key, enabled] of Object.entries(remindersMap)) {
+                stmt.run(userId, key, enabled ? 1 : 0);
+            }
+            stmt.finalize((err) => err ? reject(err) : resolve());
+        });
+    });
+}
+
+function setReminderDisabled(userId, reminderKey) {
+    return new Promise((resolve, reject) => {
+        db.run('INSERT OR REPLACE INTO userReminders (userId, reminderKey, enabled) VALUES (?, ?, 0)', [userId, reminderKey], function(err) {
+            if (err) return reject(err);
+            resolve();
+        });
+    });
+}
+
+function getReminderSettings(userId) {
+    return new Promise((resolve, reject) => {
+        db.get('SELECT paused FROM userReminderSettings WHERE userId = ?', [userId], (err, row) => {
+            if (err) return reject(err);
+            resolve({ paused: row ? !!row.paused : false });
+        });
+    });
+}
+
+function setPauseAll(userId, paused) {
+    return new Promise((resolve, reject) => {
+        db.run('INSERT OR REPLACE INTO userReminderSettings (userId, paused) VALUES (?, ?)', [userId, paused ? 1 : 0], function(err) {
+            if (err) return reject(err);
+            resolve();
+        });
+    });
+}
+
+function getUsersForReminder(reminderKey) {
+    return new Promise((resolve, reject) => {
+        db.all('SELECT userId FROM userReminders WHERE reminderKey = ? AND enabled = 1', [reminderKey], (err, rows) => {
+            if (err) return reject(err);
+            const users = (rows || []).map(r => r.userId);
+            resolve(users);
+        });
+    });
+}
+
+function getLastSent(userId, reminderKey) {
+    return new Promise((resolve, reject) => {
+        db.get('SELECT lastSent FROM userReminderSends WHERE userId = ? AND reminderKey = ?', [userId, reminderKey], (err, row) => {
+            if (err) return reject(err);
+            resolve(row ? row.lastSent : null);
+        });
+    });
+}
+
+function setLastSent(userId, reminderKey, ts) {
+    return new Promise((resolve, reject) => {
+        db.run('INSERT OR REPLACE INTO userReminderSends (userId, reminderKey, lastSent) VALUES (?, ?, ?)', [userId, reminderKey, ts], function(err) {
+            if (err) return reject(err);
+            resolve();
+        });
+    });
+}
+
 async function saveUserSettings(userId, username, labSpeed, labRelic, labDiscount, startLevel = 1, targetLevel = 10, speedUp = 1, labLevels = {}) {
     console.log('Attempting to save settings:', { userId, username, labSpeed, labRelic, labDiscount, startLevel, targetLevel, speedUp, labLevels });
     return new Promise((resolve, reject) => {
@@ -203,4 +314,15 @@ module.exports = {
     checkConnection,
     getUserUWSettings,
     saveUserUWSettings
+    ,
+    // reminders
+    getUserReminders,
+    saveUserReminders,
+    setReminderDisabled,
+    getReminderSettings,
+    setPauseAll
+    ,
+    getUsersForReminder,
+    getLastSent,
+    setLastSent
 };
