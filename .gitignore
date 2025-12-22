@@ -21,6 +21,7 @@ google_credentials.json
 *.sqlite3
 *.db-shm
 *.db-wal
+*.db
 
 ### Logs and generated images
 *.log
