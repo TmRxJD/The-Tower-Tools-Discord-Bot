@@ -30,6 +30,7 @@ function createToolsEmbed() {
         "**     Other Tools:**",
         "Chart Finder **/chart**",
         "Define Acronyms **/define**",
+        "Reminders **/remind**",
         "Tournament Checklist **/checklist**"
     ].join('\n');
 
