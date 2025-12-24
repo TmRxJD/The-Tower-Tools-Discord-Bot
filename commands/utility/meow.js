@@ -2,8 +2,15 @@ const { SlashCommandBuilder } = require('discord.js');
 
 const STRETCHY_SETS = [
     ['cat_stretchy_top', 'cat_stretchy_mid', 'cat_stretchy_bottom'],
-    ['cat_stetchy_top', 'cat_stetchy_mid', 'cat_stetchy_bottom'],
 ];
+
+function findStretchyGroup(catEmojis) {
+    for (const variant of STRETCHY_SETS) {
+        const found = variant.map(name => catEmojis.find(e => e.name === name));
+        if (found.every(Boolean)) return found;
+    }
+    return null;
+}
 
 // Track per-user usage to enforce both burst and per-minute caps.
 const usageLog = new Map();
@@ -45,8 +52,10 @@ module.exports = {
         }
 
         const catEmojis = Array.from(appEmojis?.values?.() ?? []).filter(emoji => emoji.name?.startsWith('cat_'));
-        const stretchyGroup = STRETCHY_SETS.find(set => set.every(name => catEmojis.some(emoji => emoji.name === name)));
-        const regularCats = catEmojis.filter(emoji => !(stretchyGroup || []).includes(emoji.name));
+        const stretchyGroup = findStretchyGroup(catEmojis);
+        const regularCats = stretchyGroup
+            ? catEmojis.filter(emoji => !stretchyGroup.some(s => s.id === emoji.id))
+            : catEmojis;
 
         const pool = [...regularCats];
         if (stretchyGroup) pool.push('STRETCHY_SET');
@@ -58,12 +67,9 @@ module.exports = {
 
         const choice = pool[Math.floor(Math.random() * pool.length)];
 
-        if (choice === 'STRETCHY_SET') {
-            const stretchyLines = stretchyGroup
-                .map(name => catEmojis.find(emoji => emoji.name === name))
-                .filter(Boolean)
-                .map(emoji => emoji.toString())
-                .join('\n');
+        const isStretchyChoice = choice === 'STRETCHY_SET' || (stretchyGroup && stretchyGroup.some(e => e.id === choice.id));
+        if (isStretchyChoice && stretchyGroup) {
+            const stretchyLines = stretchyGroup.map(emoji => emoji.toString()).join('\n');
             await interaction.reply(stretchyLines);
             return;
         }
