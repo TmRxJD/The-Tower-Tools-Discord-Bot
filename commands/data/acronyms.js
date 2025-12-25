@@ -211,6 +211,6 @@ module.exports = {
     sabo: 'Saboteur',
     vamp: 'Vampire',
     prot: 'Protector',
-    tt: 'https://discord.com/channels/850137217828388904/851012141837975602',
-    pq: 'https://discord.com/channels/850137217828388904/1104477649549664327'
+    tt: 'Tower Talks',
+    pq: 'Player Questions'
 };
