@@ -211,4 +211,6 @@ module.exports = {
     sabo: 'Saboteur',
     vamp: 'Vampire',
     prot: 'Protector',
+    tt: '#Tower-Talks',
+    pq: '#Player-Questions'
 };
