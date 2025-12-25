@@ -52,10 +52,9 @@ module.exports = {
         let linkOption = interaction.options.getString('link');
         // allow the invoker to request a public response; default is ephemeral (private)
         const isPublic = interaction.options.getBoolean('public') ?? false;
-        await interaction.deferReply({ ephemeral: !isPublic });
 
         if (!textOption && !linkOption) {
-            await interaction.editReply({ content: 'Usage: provide either `text` or `link` (message link or ID).' });
+            await interaction.reply({ content: 'Usage: provide either `text` or `link` (message link or ID).', ephemeral: true });
             return;
         }
 
@@ -69,8 +68,7 @@ module.exports = {
         // message context-menu command "Define Acronyms" (right-click a message -> Apps -> Define Acronyms),
         // or paste the text into the `text` option.
         if (linkOption) {
-            await interaction.deferReply({ ephemeral: true });
-            await interaction.editReply({ content: 'Fetching message content by link/ID is disabled. Use the message context menu "Define Acronyms" or provide the text directly in the `text` option.' });
+            await interaction.reply({ content: 'Fetching message content by link/ID is disabled. Use the message context menu "Define Acronyms" or provide the text directly in the `text` option.', ephemeral: true });
             return;
         }
 
@@ -78,17 +76,23 @@ module.exports = {
         const source = textOption ?? '';
         const { text: expanded, changed } = expandAcronymsInText(source);
 
+        // Do not allow public replies when no acronyms were found
+        const allowPublic = isPublic && changed;
+        const ephemeral = !allowPublic;
+        await interaction.deferReply({ ephemeral });
+
         try {
             const quoted = quoteText(source);
             if (!changed) {
-                await interaction.editReply({ content: quoted });
+                const content = quoted ? `${quoted}\n\nNo known acronyms detected.` : 'No known acronyms detected.';
+                await interaction.editReply({ content });
             } else {
                 await interaction.editReply({ content: `${quoted}\n\n${expanded}` });
             }
         } catch (err) {
             console.error('Error replying to /define:', err);
             try {
-                const followUpOpts = { content: 'There was an error processing your request.', ephemeral: !isPublic };
+                const followUpOpts = { content: 'There was an error processing your request.', ephemeral };
                 if (interaction.replied || interaction.deferred) {
                     await interaction.followUp(followUpOpts);
                 } else {
