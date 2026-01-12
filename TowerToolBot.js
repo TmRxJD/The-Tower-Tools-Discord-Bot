@@ -10,9 +10,15 @@ const reminderScheduler = require('./commands/services/reminderScheduler');
 // Use minimal intents — slash commands need only `Guilds`.
 const client = new Client({ intents: [ GatewayIntentBits.Guilds ] });
 
-// Initialize analytics database
-const analyticsDb = new Database('./analytics.db');
-const insertUsage = analyticsDb.prepare('INSERT INTO command_usage (command_name, user_id, guild_id) VALUES (?, ?, ?)');
+// Initialize analytics database (fail-closed if DB/table missing)
+let insertUsage = { run: () => {} };
+try {
+	const analyticsDb = new Database('./analytics.db');
+	analyticsDb.exec('CREATE TABLE IF NOT EXISTS command_usage (command_name TEXT, user_id TEXT, guild_id TEXT)');
+	insertUsage = analyticsDb.prepare('INSERT INTO command_usage (command_name, user_id, guild_id) VALUES (?, ?, ?)');
+} catch (err) {
+	console.warn('Analytics logging disabled; continuing without analytics DB.', err.message);
+}
 
 client.cooldowns = new Collection();
 client.commands = new Collection();

@@ -919,9 +919,10 @@ const chartCategoryIndex = {
         }
     },
     'Enemies': {
-        subcategories: ['Elites'],
+        subcategories: ['Elites', 'Resistances'],
         items: {
-            'Elites': ['Elite Spawn Chance']
+            'Elites': ['Elite Spawn Chance'],
+            'Resistances': ['Enemy Resistances']
         }
     },
     'Bots': {
@@ -1144,6 +1145,25 @@ async function generateAndSendChart(interaction, state, embed, componentRows) {
                 .setDescription('Probability of different multi-skips with Maxed Wave Skip card, WS#0, and WS#9.\n\nCredit: Unknown, if use "Report Issues" to claim your work')
                 .setColor('#b6fcd5')
                 .setImage('attachment://wave-skip-multiskip-chances.png')
+                .setFooter({ text: `${categorySelected} > ${subcategorySelected} > ${itemSelected}` });
+            await interaction.editReply({
+                content: null,
+                embeds: [chartEmbed],
+                files: [attachment],
+                components: componentRows
+            });
+            return;
+        }
+
+        // Special case: Enemies > Resistances > Enemy Resistances
+        if (categorySelected === 'Enemies' && subcategorySelected === 'Resistances' && itemSelected === 'Enemy Resistances') {
+            const chartBuffer = await chartFunctions.enemyResistancesChart.generateEnemyResistancesChart();
+            const attachment = new AttachmentBuilder(chartBuffer, { name: 'enemy-resistances.png' });
+            const chartEmbed = new EmbedBuilder()
+                .setTitle('Enemy Resistances')
+                .setDescription('Breakdown of enemy resistance effectiveness by type.\n\nCredit: <@703724472204525578>') // Credits rageboulderfist
+                .setColor('#e74c3c')
+                .setImage('attachment://enemy-resistances.png')
                 .setFooter({ text: `${categorySelected} > ${subcategorySelected} > ${itemSelected}` });
             await interaction.editReply({
                 content: null,

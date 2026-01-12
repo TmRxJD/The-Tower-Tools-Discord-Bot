@@ -1,5 +1,6 @@
 // ChartFunctions index: exports all bespoke chart generators
 module.exports = {
+    enemyResistancesChart: require('./enemyResistancesChart.js'),
     uwStoneCostChart: require('./uwStoneCostChart.js'),
     enemyBalanceMasteryChart: require('./enemyBalanceMasteryChart.js'),
     waveAcceleratorSpawnRatesChart: require('./waveAcceleratorSpawnRatesChart.js'),

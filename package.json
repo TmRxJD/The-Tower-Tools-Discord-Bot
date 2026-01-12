@@ -41,5 +41,8 @@
     "string-similarity": "^4.0.4",
     "tesseract.js": "^6.0.0",
     "whatwg-url": "^14.1.0"
+  },
+  "volta": {
+    "node": "22.20.0"
   }
 }

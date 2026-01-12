@@ -9,6 +9,7 @@ pnpm-lock.yaml
 
 ### Secrets / env
 config.json
+config.dev.json
 bot-token.txt
 google_credentials.json
 .env
