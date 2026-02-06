@@ -221,5 +221,5 @@ module.exports = {
     pcol: 'Primordial Collapse', 
     prim: 'Primordial Collapse',
     primc: 'Primordial Collapse',
-    sws: 'Shockwave Size',
+    sws: 'Shockwave Size'
 };
