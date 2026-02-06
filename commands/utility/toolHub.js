@@ -30,6 +30,7 @@ function createToolsEmbed() {
         "[**Vault**](https://the-tower-run-tracker.com/trackers/vault)",        "",
         "**     Other Tools:**",
         "Chart Finder **/chart**",
+        "Creator Codes **/creator**",
         "Define Acronyms **/define**",
         "Reminders **/remind**",
         "Tournament Checklist **/checklist**"
