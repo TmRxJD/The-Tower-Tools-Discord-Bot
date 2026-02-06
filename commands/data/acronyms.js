@@ -1,8 +1,5 @@
 // Acronym definitions map. Keys are lowercase; variants are included where applicable.
 
-const { PureComponent } = require("react");
-const { PROTOCOL } = require("sqlite3");
-
 module.exports = {
     cd: 'Cooldown',
     d:  'Duration',

@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ComponentType } = require('discord.js');
-const db = require('./dbHandler');
+const db = require('../services/dbHandler');
 const { reminders, getNextTimestampFor } = require('../data/remindersData');
 const reminderService = require('../services/reminderService');
 

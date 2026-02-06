@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const LABS = require('./upgradesData/labData.js');
-const { getUserSettings, saveUserSettings } = require('./dbHandler.js');
+const { getUserSettings, saveUserSettings } = require('../services/dbHandler.js');
 const { formatNumberOutput } = require('./statFinderFunctions.js');
 const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
 const { createCanvas } = require('canvas');

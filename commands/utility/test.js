@@ -1,7 +1,7 @@
 const { createCanvas } = require('canvas');
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const UW_DATA = require('./upgradesData/uwData.js');
-const { getUserUWSettings, saveUserUWSettings } = require('./dbHandler.js');
+const { getUserUWSettings, saveUserUWSettings } = require('../services/dbHandler.js');
 const path = require('path');
 
 // Chart generator for UW stone cost (table style, similar to labCalc)

@@ -1,5 +1,5 @@
 const { reminders, getNextTimestampFor } = require('../data/remindersData');
-const db = require('../utility/dbHandler');
+const db = require('./dbHandler');
 const reminderService = require('./reminderService');
 
 let interval = null;

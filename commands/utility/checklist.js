@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { getUserChecklist, saveUserChecklist } = require('./dbHandler.js');
+const { getUserChecklist, saveUserChecklist } = require('../services/dbHandler.js');
 
 // Optional default labels (array of 12 strings). Use setDefaultLabels to override.
 let DEFAULT_LABELS = null;

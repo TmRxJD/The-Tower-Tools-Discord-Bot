@@ -1,5 +1,5 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
-const db = require('../utility/dbHandler');
+const db = require('./dbHandler');
 const { getByKey, getNextTimestampFor } = require('../data/remindersData');
 
 async function sendReminderDM(client, userId, reminderKey) {

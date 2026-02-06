@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 //const { LABS } = require('./upgradesData/labData.js');
-const { getUserSettings, saveUserSettings } = require('../dbHandler.js');
+const { getUserSettings, saveUserSettings } = require('../../services/dbHandler.js');
 const { parseNumberInput, formatNumberOutput } = require('../statFinderFunctions.js');
 const fs = require('fs');
 const puppeteer = require('puppeteer');
