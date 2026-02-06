@@ -1,5 +1,8 @@
 // Acronym definitions map. Keys are lowercase; variants are included where applicable.
 
+const { PureComponent } = require("react");
+const { PROTOCOL } = require("sqlite3");
+
 module.exports = {
     cd: 'Cooldown',
     d:  'Duration',
@@ -212,5 +215,11 @@ module.exports = {
     vamp: 'Vampire',
     prot: 'Protector',
     tt: 'Tower Talks',
-    pq: 'Player Questions'
+    pq: 'Player Questions',
+    borb: 'Boss Orb',
+    Pco: 'Primordial Collapse', 
+    pcol: 'Primordial Collapse', 
+    prim: 'Primordial Collapse',
+    primc: 'Primordial Collapse',
+    sws: 'Shockwave Size',
 };
