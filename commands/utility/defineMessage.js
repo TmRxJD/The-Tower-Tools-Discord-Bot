@@ -14,18 +14,34 @@ function expandAcronymsInText(text) {
     // lazy-load acronyms to avoid circular requires
     const acronyms = require('../data/acronyms');
     const caseSensitiveKeys = new Set(['is', 'as']);
-    for (const keyRaw of Object.keys(acronyms)) {
+    // iterate longer keys first to avoid partial matches (e.g. 'uw+' vs 'uw')
+    const keys = Object.keys(acronyms).sort((a, b) => b.length - a.length);
+
+    // Use placeholders so inserted replacement text isn't subject to later replacements
+    const placeholders = [];
+    for (const keyRaw of keys) {
         const key = keyRaw;
-        const replacement = titleCase(String(acronyms[keyRaw] || acronyms[keyRaw]));
+        const replacement = String(acronyms[keyRaw] || acronyms[keyRaw]);
         const isCaseSensitive = caseSensitiveKeys.has(keyRaw.toLowerCase());
         const matchKey = isCaseSensitive ? keyRaw.toUpperCase() : key;
         const escaped = escapeRegex(matchKey);
         const flags = isCaseSensitive ? 'g' : 'gi';
         const re = new RegExp('(^|[^A-Za-z0-9])(' + escaped + ')(?=$|[^A-Za-z0-9])', flags);
+        const placeholder = `\u0001${placeholders.length}\u0001`;
+        placeholders.push(replacement);
         out = out.replace(re, (full, prefix, matched) => {
             changed = true;
-            return (prefix || '') + `**${replacement}**`;
+            return (prefix || '') + placeholder;
         });
+    }
+
+    // restore placeholders with the final replacement text (preserve exact map text)
+    if (placeholders.length) {
+        for (let i = 0; i < placeholders.length; i++) {
+            const ph = `\u0001${i}\u0001`;
+            // replace all occurrences of the placeholder with the bolded replacement
+            out = out.split(ph).join(`**${placeholders[i]}**`);
+        }
     }
     return { text: out, changed };
 }

@@ -10,15 +10,28 @@ function titleCase(str) {
 function expandAcronymsInText(text) {
     let changed = false;
     let out = text;
-    for (const keyRaw of Object.keys(acronyms)) {
+    // iterate longer keys first to avoid partial matches (e.g. 'uw+' vs 'uw')
+    const keys = Object.keys(acronyms).sort((a, b) => b.length - a.length);
+    // Use placeholders so inserted replacement text isn't subject to later replacements
+    const placeholders = [];
+    for (const keyRaw of keys) {
         const key = keyRaw;
         const replacement = titleCase(String(acronyms[keyRaw] || acronyms[keyRaw]));
         const escaped = escapeRegex(key);
         const re = new RegExp('(^|[^A-Za-z0-9])(' + escaped + ')(?=$|[^A-Za-z0-9])', 'gi');
+        const placeholder = `\u0001${placeholders.length}\u0001`;
+        placeholders.push(replacement);
         out = out.replace(re, (full, prefix, matched) => {
             changed = true;
-            return (prefix || '') + `**${replacement}**`;
+            return (prefix || '') + placeholder;
         });
+    }
+
+    if (placeholders.length) {
+        for (let i = 0; i < placeholders.length; i++) {
+            const ph = `\u0001${i}\u0001`;
+            out = out.split(ph).join(`**${placeholders[i]}**`);
+        }
     }
     return { text: out, changed };
 }

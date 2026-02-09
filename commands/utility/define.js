@@ -18,9 +18,14 @@ function expandAcronymsInText(text) {
     let changed = false;
     let out = text;
     const caseSensitiveKeys = new Set(['is', 'as']);
-    for (const keyRaw of Object.keys(acronyms)) {
+    // iterate longer keys first to avoid partial matches (e.g. 'uw+' vs 'uw')
+    const keys = Object.keys(acronyms).sort((a, b) => b.length - a.length);
+
+    // Use placeholders so inserted replacement text isn't subject to later replacements
+    const placeholders = [];
+    for (const keyRaw of keys) {
         const key = keyRaw; // preserve exact key (may contain punctuation/spaces)
-        const replacement = titleCase(String(acronyms[keyRaw] || acronyms[keyRaw]));
+        const replacement = String(acronyms[keyRaw] || acronyms[keyRaw]);
         // Match the key when it's not surrounded by alphanumeric characters (prevents partial matches)
         // Use (^|[^A-Za-z0-9])(<key>)(?=$|[^A-Za-z0-9]) so we can preserve the prefix in replacement
         const isCaseSensitive = caseSensitiveKeys.has(keyRaw.toLowerCase());
@@ -28,10 +33,20 @@ function expandAcronymsInText(text) {
         const escaped = escapeRegex(matchKey);
         const flags = isCaseSensitive ? 'g' : 'gi';
         const re = new RegExp('(^|[^A-Za-z0-9])(' + escaped + ')(?=$|[^A-Za-z0-9])', flags);
+        const placeholder = `\u0001${placeholders.length}\u0001`;
+        placeholders.push(replacement);
         out = out.replace(re, (full, prefix, matched) => {
             changed = true;
-            return (prefix || '') + `**${replacement}**`;
+            return (prefix || '') + placeholder;
         });
+    }
+
+    // restore placeholders with the final replacement text (preserve exact map text)
+    if (placeholders.length) {
+        for (let i = 0; i < placeholders.length; i++) {
+            const ph = `\u0001${i}\u0001`;
+            out = out.split(ph).join(`**${placeholders[i]}**`);
+        }
     }
     return { text: out, changed };
 }
