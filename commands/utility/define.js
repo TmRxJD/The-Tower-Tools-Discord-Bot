@@ -17,13 +17,17 @@ function quoteText(text) {
 function expandAcronymsInText(text) {
     let changed = false;
     let out = text;
+    const caseSensitiveKeys = new Set(['is', 'as']);
     for (const keyRaw of Object.keys(acronyms)) {
         const key = keyRaw; // preserve exact key (may contain punctuation/spaces)
         const replacement = titleCase(String(acronyms[keyRaw] || acronyms[keyRaw]));
         // Match the key when it's not surrounded by alphanumeric characters (prevents partial matches)
         // Use (^|[^A-Za-z0-9])(<key>)(?=$|[^A-Za-z0-9]) so we can preserve the prefix in replacement
-        const escaped = escapeRegex(key);
-        const re = new RegExp('(^|[^A-Za-z0-9])(' + escaped + ')(?=$|[^A-Za-z0-9])', 'gi');
+        const isCaseSensitive = caseSensitiveKeys.has(keyRaw.toLowerCase());
+        const matchKey = isCaseSensitive ? keyRaw.toUpperCase() : key;
+        const escaped = escapeRegex(matchKey);
+        const flags = isCaseSensitive ? 'g' : 'gi';
+        const re = new RegExp('(^|[^A-Za-z0-9])(' + escaped + ')(?=$|[^A-Za-z0-9])', flags);
         out = out.replace(re, (full, prefix, matched) => {
             changed = true;
             return (prefix || '') + `**${replacement}**`;

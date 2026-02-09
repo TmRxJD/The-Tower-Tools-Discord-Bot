@@ -13,11 +13,15 @@ function expandAcronymsInText(text) {
     let out = text;
     // lazy-load acronyms to avoid circular requires
     const acronyms = require('../data/acronyms');
+    const caseSensitiveKeys = new Set(['is', 'as']);
     for (const keyRaw of Object.keys(acronyms)) {
         const key = keyRaw;
         const replacement = titleCase(String(acronyms[keyRaw] || acronyms[keyRaw]));
-        const escaped = escapeRegex(key);
-        const re = new RegExp('(^|[^A-Za-z0-9])(' + escaped + ')(?=$|[^A-Za-z0-9])', 'gi');
+        const isCaseSensitive = caseSensitiveKeys.has(keyRaw.toLowerCase());
+        const matchKey = isCaseSensitive ? keyRaw.toUpperCase() : key;
+        const escaped = escapeRegex(matchKey);
+        const flags = isCaseSensitive ? 'g' : 'gi';
+        const re = new RegExp('(^|[^A-Za-z0-9])(' + escaped + ')(?=$|[^A-Za-z0-9])', flags);
         out = out.replace(re, (full, prefix, matched) => {
             changed = true;
             return (prefix || '') + `**${replacement}**`;
