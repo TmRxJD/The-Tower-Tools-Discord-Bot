@@ -2,7 +2,7 @@
 
 module.exports = {
     cd: 'Cooldown',
-    d:  'Duration',
+    dur: 'Duration',
     bh: 'Black Hole',
     cf: 'Chrono Field / Crit Factor',
     cl: 'Chain Lightning',
