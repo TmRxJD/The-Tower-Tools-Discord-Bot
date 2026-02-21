@@ -1,17 +1,17 @@
 
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, ChannelType, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { createCanvas, loadImage } = require('canvas');
-const chartFunctions = require('./chartFunctions');
-const fs = require('fs'); 
+const chartFunctions = require('./chartFunctions/index.js');
+const fs = require('fs');
 
-const uwData = require('./upgradesData/uwData.js');
+const { uwStoneChartData: uwData } = require('../../../../packages/platform/dist/tools/uw-stone-chart-data.js');
 
 module.exports = {
     category: 'utility',
     data: new SlashCommandBuilder()
         .setName('chart')
         .setDescription('Interactive charts for Tower Defense data'),
-    
+
     async execute(interaction) {
         try {
             // Initial state: no preselection
@@ -29,12 +29,12 @@ module.exports = {
             const itemRow = createItemSelectMenu();
             // Home screen: Add New Chart and Close buttons
             const homeButtonRow = new ActionRowBuilder().addComponents(
-                
+
                 new ButtonBuilder()
                     .setCustomId('add_new_chart')
                     .setLabel('Add New Chart')
                     .setStyle(ButtonStyle.Success),
-                  
+
                 new ButtonBuilder()
                     .setCustomId('close_menu')
                     .setLabel('Close')
@@ -429,7 +429,7 @@ module.exports = {
                                         // No new message sent to user
                                     });
                                 }
-                                    
+
                                 // (no catch block needed here, error handling is not required for this simple logic)
                             });
                             buttonCollector2.on('collect', async btnInt2 => {
@@ -850,7 +850,7 @@ function createInitialEmbed() {
                 '1. Select a category from the dropdown below\n' +
                 '2. Choose a subcategory\n' +
                 '3. Select the specific chart you want\n' +
-                '4. View the results or change to another chart\n' + 
+                '4. View the results or change to another chart\n' +
                 '5. If you have a chart you want to add, use the "Add New" Button below to submit it for review.'
 
             )
@@ -1075,8 +1075,8 @@ async function buildChartEmbed(state, prevEmbed) {
 }
 
 // Generate and send chart, but keep dropdowns persistent
-async function generateAndSendChart(interaction, state, embed, componentRows) {        
-        
+async function generateAndSendChart(interaction, state, embed, componentRows) {
+
     const { categorySelected, subcategorySelected, itemSelected } = state;
 
     try {
@@ -1116,7 +1116,7 @@ async function generateAndSendChart(interaction, state, embed, componentRows) {
             });
             return;
         }
-        
+
         // Special case: Ultimate Weapons > Poison Swamp > Perma Swamp Stone Costs
         if (categorySelected === 'Ultimate Weapons' && subcategorySelected === 'Poison Swamp' && itemSelected === 'Perma Swamp Stone Costs') {
             const chartBuffer = await chartFunctions.permaSwampStoneCostChart.generatePermaSwampStoneCostChart();
@@ -1211,7 +1211,7 @@ async function generateAndSendChart(interaction, state, embed, componentRows) {
             });
             return;
         }
-        
+
         // Special case: Ultimate Weapons > Chronofield > CF+ Rotation Rates
         if (categorySelected === 'Ultimate Weapons' && subcategorySelected === 'Chronofield' && itemSelected === 'CF+ Rotation Rates') {
             const chartBuffer = await chartFunctions.CFPlusRotationRatesChart.generateCFPlusRotationRatesChart();
@@ -1570,7 +1570,7 @@ async function generateAndSendChart(interaction, state, embed, componentRows) {
             const attachment = new AttachmentBuilder(chartBuffer, { name: 'recovery-package-drop-rates.png' });
             const chartEmbed = new EmbedBuilder()
                 .setTitle('Recovery Package Chance Mastery: Drop Rates')
-                .setDescription('Shards per day for each Shatter Lab and RPC+ mastery level, for 15,000 and 10,000 waves.\n\nCredit: Unknown, if use "Report Issues" to claim your work') 
+                .setDescription('Shards per day for each Shatter Lab and RPC+ mastery level, for 15,000 and 10,000 waves.\n\nCredit: Unknown, if use "Report Issues" to claim your work')
                 .setColor('#00cc99')
                 .setImage('attachment://recovery-package-drop-rates.png')
                 .setFooter({ text: `${categorySelected} > ${subcategorySelected} > ${itemSelected}` });
@@ -1687,7 +1687,7 @@ function drawErrorMessage(ctx, width, height) {
         // Clear canvas
         ctx.fillStyle = '#ffeeee';
         ctx.fillRect(0, 0, width, height);
-        
+
         // Draw error message
         ctx.fillStyle = '#990000';
         ctx.font = '24px Arial';

@@ -4,29 +4,22 @@
 // Category: Ultimate Weapons > Poison Swamp > Perma Swamp Stone Costs
 
 const { createCanvas } = require('canvas');
-const style = require('./style');
+const style = require('./style.js');
+const {
+  permaSwampStoneCostData,
+  permaSwampStoneCostDescription,
+  permaSwampStoneCostFooter,
+  permaSwampStoneCostBarSeries,
+  toSharedChartTablePreviewRows,
+} = require('../../../../../packages/platform/dist/tools/chart-data.js');
 
-const TITLE = 'Perma Swamp Stone Costs';
-const FOOTER = 'Credit: u/Malice_Striker';
-const DESCRIPTION = `Stone costs to achieve permanent Poison Swamp (1:1 sync) 
-and the most stone efficient way to do so.`;
-
-// Table data from the image
-const HEADERS = [
-  'Duration', 'Stones', 'Cooldown', 'Stones', 'Sync', 'Total Cost'
-];
-const DATA = [
-  ['55', '220', '55', '1750', '55/55', '1970'],
-  ['60', '340', '60', '1508', '60/60', '1848'],
-  ['65', '490', '65', '1284', '65/65', '1774'],
-  ['70', '690', '70', '1078', '70/70', '1768'],
-  ['75', '950', '75', '890', '75/75', '1840'],
-  ['80', '1280', '80', '720', '80/80', '2000'],
-];
-
-// Bar chart data (sync, total cost)
-const BAR_LABELS = ['55/55', '60/60', '65/65', '70/70', '75/75', '80/80'];
-const BAR_VALUES = [1970, 1848, 1774, 1768, 1840, 2000];
+const TITLE = permaSwampStoneCostData.title;
+const FOOTER = permaSwampStoneCostFooter;
+const DESCRIPTION = permaSwampStoneCostDescription;
+const HEADERS = permaSwampStoneCostData.columns.map(column => column.label);
+const DATA = toSharedChartTablePreviewRows(permaSwampStoneCostData).map(row => [...row]);
+const BAR_LABELS = permaSwampStoneCostBarSeries.map(row => row.label);
+const BAR_VALUES = permaSwampStoneCostBarSeries.map(row => row.value);
 
 async function generatePermaSwampStoneCostChart() {
   // Style

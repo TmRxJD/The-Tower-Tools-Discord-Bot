@@ -2,140 +2,13 @@
 
 const { createCanvas, loadImage } = require('canvas');
 const path = require('path');
-const style = require('./style');
-
-// Data extracted from the provided image
-const UW_UNLOCK_COSTS = [
-  { count: '0', cost: '500' },
-  { count: '1', cost: '625' },
-  { count: '2', cost: '750' },
-  { count: '3', cost: '975' },
-  { count: '4', cost: '1250' },
-  { count: '5', cost: '1650' },
-  { count: '6', cost: '2200' },
-  { count: '7', cost: '2900' },
-  { count: '8', cost: '3800' },
-  { count: '9', cost: '-/-' },
-];
-const UW_UNLOCK_TOTAL = '14650';
-
-const UPGRADE_SECTIONS = [
-  {
-    title: '300 Base Scaling',
-    total: '49,100',
-    upgrades: [
-      {
-        icon: 'CL.png',
-        name: 'Chain\nLightning',
-        arrow: '→',
-        next: 'Smite',
-        desc: 'Every Chain Lightning hit has a chance to do extra damage equal to X% the current wave HP (Max hits: 100/enemy).',
-        values: ['0.05%','0.10%','0.15%','0.20%','0.25%','0.30%','0.35%','0.40%','0.45%','0.50%','0.55%','0.60%','','','','12,650'],
-        costs: ['Unlock','300','375','475','600','725','925','1150','1450','1800','2200','2650','3150','3700','4300','Total'],
-      },
-      {
-        icon: 'SM.png',
-        name: 'Smart\nMissiles',
-        arrow: '→',
-        next: 'Cover\nFire',
-        desc: 'Launch an addition Smart Missile every X seconds.',
-        values: ['13','12','11','10','9','8','7','6','5','4','3','2','','','','12,650'],
-        costs: ['Unlock','300','375','475','600','725','925','1150','1450','1800','2200','2650','3150','3700','4300','Total'],
-      },
-      {
-        icon: 'PS.png',
-        name: 'Poison\nSwamp',
-        arrow: '→',
-        next: 'Death\nCreep',
-        desc: 'Every time poison ticks, the damage is increased by X Poison Swamp\'s base damage.',
-        values: ['1.2x','1.9x','2.6x','3.3x','4x','4.7x','5.4x','6.1x','6.8x','7.5x','8.2x','8.9x','9.6x','10.3x','11.1x','23,800'],
-        costs: ['Unlock','300','375','475','600','725','925','1150','1450','1800','2200','2650','3150','3700','4300','Total'],
-      },
-    ],
-  },
-  {
-    title: '300 Base modified',
-    total: '20,070',
-    upgrades: [
-      {
-        icon: 'GT.png',
-        name: 'Golden\nTower',
-        arrow: '→',
-        next: 'Golden\nCombo',
-        desc: 'While Golden Tower is active a combo counter will be visible, each enemy kill adds +1. When it finishes you receive extra cash and coins of X% per combo.¹',
-        values: ['0.03%','0.06%','0.09%','0.12%','0.15%','0.18%','0.21%','0.24%','0.27%','0.30%','0.33%','0.36%','0.39%','0.42%','0.45%','20,070'],
-        costs: ['Unlock','300','360','430','510','620','750','900','1100','1350','1650', '2050', '2600', '3300','4150','Total'],
-      },
-    ],
-  },
-  {
-    title: '300 Base Modified',
-    total: '18,570',
-    upgrades: [
-      {
-        icon: 'ILM.png',
-        name: 'Inner\nLand Mines',
-        arrow: '→',
-        next: 'Charged\nMines',
-        desc: 'The damage of Inner Land Mines charge up the longer they\'re alive, increasing by X per second.',
-        values: ['0.50/s','1.50/s','2.90/s','4.70/s','6.90/s','9.50/s','12.50/s','15.90/s','19.70/s','23.90/s','28.50/s','33.50/s','38.90/s','44.70/s','50.90/s','18,570'],
-        costs: ['Unlock','300','360','430','510','620','750','900','1100','1350','1650','2000','2400','2850','3350','Total'],
-      },
-    ],
-  },
-  {
-    title: '400 Base Scaling',
-    total: '57,150',
-    upgrades: [
-      {
-        icon: 'DW.png',
-        name: 'Death\nWave',
-        arrow: '→',
-        next: 'Kill\nWall',
-        desc: 'Each Effect Wave hit amplifies the Death Wave damage store by X (additively).',
-        values: ['x3','x4','x6','x9','x13','x18','x24','x31','x39','x48','x58','x69','x81','x94','x108','19,050'],
-        costs: ['Unlock','400','500','610','730','860','1000','1150','1300','1500','1700','1950','2200','2450','2700','Total'],
-      },
-      {
-        icon: 'BH.png',
-        name: 'Black\nHole',
-        arrow: '→',
-        next: 'Consume',
-        desc: 'Each Black Hole deals X% of the current Wave HP to every enemy affected at the end of its activation.',
-        values: ['0.05%','0.10%','0.15%','0.20%','0.25%','0.30%','0.35%','0.40%','0.45%','0.50%','0.55%','0.60%','0.65%','0.70%','0.75%','19,050'],
-        costs: ['Unlock','400','500','610','730','860','1000','1150','1300','1500','1700', '1950','2200','2450','2700','Total'],
-      },
-      {
-        icon: 'CF.png',
-        name: 'Chrono\nField',
-        arrow: '→',
-        next: 'Chrono\nLoop',
-        desc: 'Enemies affected by Chrono Field spiral towards the tower with a rotation rate of X.',
-        values: ['10%','15%','20%','25%','30%','35%','40%','45%','50%','55%','60%','65%','70%','75%','','16,350'],
-        costs: ['Unlock','400','500','610','730','860','1000','1150','1300','1500','1700','1950','2200','2450','Total'],
-      },
-      {
-        icon: 'SL.png',
-        name: 'Spotlight',
-        arrow: '→',
-        next: 'Light\nRange',
-        desc: 'Spotlight damage bonus is boosted by X your damage/meter.',
-        values: ['x0.01','x0.02','x0.03','x0.04','x0.05','x0.06','x0.07','x0.08','x0.09','x0.10','x0.11','x0.12','x0.13','x0.14','x0.15','19,050'],
-        costs: ['Unlock','400','500','610','730','860','1000','1150','1300','1500','1700','1950','2200','2450','2700','Total'],
-      },
-    ],
-  },
-];
-
-const FOOTER_TEXT = [
-  '* The Unlock Cost increases with each UW+ upgrade owned as shown.',
-  '* Every UW+ has 10 upgrades. There are two scaling patterns for the upgrade costs, both are detailed here.',
-  '* GT+ formula: (1 + .0003 x (level + 1)) ^ kills - 1',
-  'Note that Galaxy Compressor DOES reduce the cooldowns of UW+ as well.',
-  '',  
-  'Credit: Kosmirion Epos / kosmirionepos',
-  'Data as of 05.27.2024'
-];
+const style = require('./style.js');
+const {
+  uwPlusUnlockCosts,
+  uwPlusUnlockTotal,
+  uwPlusUpgradeSections,
+  uwPlusFooterText,
+} = require('../../../../../packages/platform/dist/tools/uw-plus-chart-data.js');
 
 async function generateUWPlusUpgradesChart() {
   // Style constants (dark theme, modern)
@@ -183,17 +56,17 @@ async function generateUWPlusUpgradesChart() {
   const ctx = createCanvas(10, 10).getContext('2d');
   ctx.font = cellFont;
   // Unlock cost table
-  let unlockCol1 = Math.max(ctx.measureText('Number of UW+').width, ...UW_UNLOCK_COSTS.map(r => ctx.measureText(r.count).width));
-  let unlockCol2 = Math.max(ctx.measureText('Unlock Cost').width, ...UW_UNLOCK_COSTS.map(r => ctx.measureText(r.cost).width));
+  let unlockCol1 = Math.max(ctx.measureText('Number of UW+').width, ...uwPlusUnlockCosts.map(r => ctx.measureText(r.count).width));
+  let unlockCol2 = Math.max(ctx.measureText('Unlock Cost').width, ...uwPlusUnlockCosts.map(r => ctx.measureText(r.cost).width));
   unlockCol1 += cellPadding * 2;
   unlockCol2 += cellPadding * 2;
   const unlockTableWidth = unlockCol1 + unlockCol2;
-  const unlockTableHeight = (UW_UNLOCK_COSTS.length + 1) * baseRowHeight + baseRowHeight;
+  const unlockTableHeight = (uwPlusUnlockCosts.length + 1) * baseRowHeight + baseRowHeight;
 
   // Find max number of value/cost columns
-  let maxValueCols = Math.max(...UPGRADE_SECTIONS.map(s => s.upgrades[0].costs.length));
+  let maxValueCols = Math.max(...uwPlusUpgradeSections.map(s => s.upgrades[0].costs.length));
   // Pad all upgrades to have maxValueCols values/costs
-  for (const section of UPGRADE_SECTIONS) {
+  for (const section of uwPlusUpgradeSections) {
     for (const upg of section.upgrades) {
       while (upg.values.length < maxValueCols) upg.values.push('');
       while (upg.costs.length < maxValueCols) upg.costs.push('');
@@ -203,7 +76,7 @@ async function generateUWPlusUpgradesChart() {
   let colWidths = [iconSize + 8, 120, 24, 120, 320];
   for (let i = 0; i < maxValueCols; i++) {
     let maxVal = 0;
-    for (const section of UPGRADE_SECTIONS) {
+    for (const section of uwPlusUpgradeSections) {
       for (const upg of section.upgrades) {
         maxVal = Math.max(
           maxVal,
@@ -220,7 +93,7 @@ async function generateUWPlusUpgradesChart() {
   // Calculate row heights for each upgrade (for wrapped desc)
   let sectionRowHeights = [];
   let sectionHeights = [];
-  for (const section of UPGRADE_SECTIONS) {
+  for (const section of uwPlusUpgradeSections) {
     let rowHeights = [];
     for (const upg of section.upgrades) {
       const descLines = wrapText(ctx, upg.desc, 320 - cellPadding * 2);
@@ -269,7 +142,7 @@ async function generateUWPlusUpgradesChart() {
   uy += baseRowHeight;
   ctx2.font = cellFont;
   ctx2.textBaseline = 'middle';
-  for (const row of UW_UNLOCK_COSTS) {
+  for (const row of uwPlusUnlockCosts) {
     ctx2.fillStyle = evenRowBg;
     ctx2.fillRect(ux, uy, unlockTableWidth, baseRowHeight);
     ctx2.strokeStyle = borderColor;
@@ -288,13 +161,13 @@ async function generateUWPlusUpgradesChart() {
   ctx2.fillStyle = headerText;
   ctx2.textAlign = 'center';
   ctx2.fillText('Total Cost:', ux + unlockCol1 / 2, uy + baseRowHeight / 2);
-  ctx2.fillText(UW_UNLOCK_TOTAL, ux + unlockCol1 + unlockCol2 / 2, uy + baseRowHeight / 2);
+  ctx2.fillText(uwPlusUnlockTotal, ux + unlockCol1 + unlockCol2 / 2, uy + baseRowHeight / 2);
 
   // Draw upgrade tables (to the right of unlock table)
   let sx = ux + unlockTableWidth + 40;
   let sy = titleHeight + margin;
-  for (let s = 0; s < UPGRADE_SECTIONS.length; s++) {
-    const section = UPGRADE_SECTIONS[s];
+  for (let s = 0; s < uwPlusUpgradeSections.length; s++) {
+    const section = uwPlusUpgradeSections[s];
     const rowHeights = sectionRowHeights[s];
     // Section title (header row 1)
     ctx2.font = headerCellFont;
@@ -474,7 +347,7 @@ async function generateUWPlusUpgradesChart() {
   ctx2.fillStyle = footerColor;
   ctx2.textAlign = 'left';
   let footerY = sy + 26;
-  for (const line of FOOTER_TEXT) {
+  for (const line of uwPlusFooterText) {
     ctx2.fillText(line, margin, footerY);
     footerY += 18;
   }

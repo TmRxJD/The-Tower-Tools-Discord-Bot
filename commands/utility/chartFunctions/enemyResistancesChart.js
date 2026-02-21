@@ -1,61 +1,37 @@
 // Enemy Resistances chart generator
 const { createCanvas } = require('canvas');
 const style = require('./style.js');
+const { renderSimpleTableChart } = require('./simpleTableChartRenderer.js');
+const {
+  enemyResistanceColumns,
+  enemyResistanceRows,
+  enemyResistanceLegend,
+  enemyResistanceFooterSentenceOne,
+  enemyResistanceFooterSentenceTwo,
+  enemyResistanceFooterCredit,
+} = require('../../../../../packages/platform/dist/tools/chart-data.js');
 
-const COLUMNS = [
-  'Effect',
-  'Boss Ult/Boss',
-  'Fast Ult',
-  'Range Ult',
-  'Elite Ult/Elite',
-  'Tank Ult',
-  'Tank Ult (CD)',
-  'Prot Ult',
-  'Prot Ult (CD)',
-  'Fleets'
-];
+const COLUMNS = [...enemyResistanceColumns];
 
 // type: good | partial | bad | neutral
-const ROWS = [
-  // Slow effects
-  { label: 'Slow', cells: ['good','good','good','good','good','good','bad','good',{ text: '50% effective', type: 'partial' }] },
+const ROWS = enemyResistanceRows.map(row => ({
+  label: row.label,
+  cells: row.cells.map(cell => ({ text: cell.text, type: cell.type })),
+}));
 
-  // Stuns
-  { label: 'LM Stun',  cells: ['bad','good','good','good','bad','good','bad','good',{ text: '50% duration', type: 'partial' }] },
-  { label: 'ILM Stun', cells: ['good','good','good','good','good','good','bad','good',{ text: '50% duration', type: 'partial' }] },
-  { label: 'PS Stun',  cells: ['good','good','good','good','good','good','bad','good',{ text: '50% duration', type: 'partial' }] },
+const LEGEND = enemyResistanceLegend.map(entry => ({
+  label: entry.label,
+  type: entry.type,
+}));
 
-  // Thunderbolt
-  { label: 'Thunder Bot', cells: [{ text: '50% slow', type: 'partial' },'good','good',{ text: '50% slow', type: 'partial' },'good','good','bad','good',{ text: '50% slow', type: 'partial' }] },
-
-  // Orb / Death Ray
-  { label: 'Orb Instakill', cells: ['bad','bad','bad','bad','bad','good','bad','bad','bad'] },
-  { label: 'Orb 2%', cells: ['good','good','good','bad','good','bad','bad','bad','bad'] },
-  { label: 'Death Ray Instakill', cells: ['bad','bad','bad','bad','bad','good','bad','bad','bad'] },
-  { label: 'Death Ray Mastery %', cells: ['bad','bad','bad','bad','bad','bad','good','good','bad'] },
-
-  // Blackhole / Shockbite
-  { label: 'Blackhole Suction', cells: ['bad','bad','bad','bad','bad','good','good','good','bad'] },
-  { label: 'Blackhole 2%', cells: ['bad','bad','bad','bad','bad','good','bad','good','bad'] },
-  { label: 'Blackhole+', cells: ['bad','bad','bad','bad','bad','good','good','good','bad'] },
-
-  // Knockback / Shockwave
-  { label: 'Knockback', cells: ['bad','good','good','good','bad','good','bad','good','bad'] },
-  { label: 'Shockwave', cells: ['bad','good','good','bad','bad','good','bad','good','bad'] },
-
-  // Auras and nets
-  { label: 'Nuke/Slow Aura Mastery', cells: ['good','good','good','good','good','good','good','good','bad'] },
-  { label: 'Energy Net', cells: ['good','bad','bad','bad','bad','bad','bad','bad','bad'] },
-
-  // Thorns
-  { label: 'Thorns', cells: [{ text: '50% effective', type: 'partial' }, 'good','good','good','bad','good','good','good',{ text: '10% effective', type: 'partial' }] }
-];
-
-const LEGEND = [
-  { label: 'Vulnerable', type: 'good' },
-  { label: 'Less effective', type: 'partial' },
-  { label: "Invulnerable", type: 'bad' }
-];
+const CHART_DATA = {
+  title: '',
+  headers: [...COLUMNS],
+  rows: ROWS.map(row => [
+    row.label,
+    ...row.cells.map(cell => normalizeCell(cell).text || ''),
+  ]),
+};
 
 function toneToColor(type) {
   switch (type) {
@@ -78,144 +54,101 @@ function normalizeCell(cell) {
 
 async function generateEnemyResistancesChart() {
   const rowHeight = style.baseRowHeight;
-  const headerFont = style.headerFont;
-  const cellFont = style.cellFont || style.font;
-  const headerBg = style.headerBg;
-  const headerText = style.headerText;
-  const borderColor = style.borderColor;
-  const oddRowBg = style.oddRowBg;
-  const evenRowBg = style.evenRowBg;
-  const textColor = style.textColor;
+  const legendHeight = 60;
   const cellPadding = style.cellPadding;
 
-  // Measure column widths
   const measureCtx = createCanvas(1, 1).getContext('2d');
-  measureCtx.font = headerFont;
-  const colWidths = Array(COLUMNS.length).fill(0);
+  const colWidths = CHART_DATA.headers.map((header, colIndex) => {
+    let maxWidth = 0;
+    measureCtx.font = style.headerFont;
+    maxWidth = Math.max(maxWidth, measureCtx.measureText(String(header || '')).width);
 
-  COLUMNS.forEach((col, ci) => {
-    let maxWidth = measureCtx.measureText(col).width;
-    measureCtx.font = cellFont;
-    for (const row of ROWS) {
-      if (ci === 0) {
-        maxWidth = Math.max(maxWidth, measureCtx.measureText(row.label).width);
-      } else {
-        const cell = normalizeCell(row.cells[ci - 1]);
-        const lines = String(cell.text || (typeof cell.type === 'string' ? '' : '')).split('\n');
-        for (const line of lines) {
-          maxWidth = Math.max(maxWidth, measureCtx.measureText(line).width);
-        }
+    measureCtx.font = style.cellFont || style.font;
+    for (let rowIndex = 0; rowIndex < CHART_DATA.rows.length; rowIndex += 1) {
+      const value = String(CHART_DATA.rows[rowIndex][colIndex] || '');
+      for (const line of value.split('\n')) {
+        maxWidth = Math.max(maxWidth, measureCtx.measureText(line).width);
       }
     }
-    colWidths[ci] = Math.ceil(maxWidth + cellPadding * 2);
-    measureCtx.font = headerFont;
+
+    return Math.ceil(maxWidth + cellPadding * 2);
   });
 
-  const tableWidth = colWidths.reduce((a, b) => a + b, 0);
-  const tableHeight = rowHeight * (1 + ROWS.length);
-  const legendHeight = 60;
-  const footerSentenceOne = 'Tank Ults and Prot Ults on cooldown are just regular Tanks and Prots with no differences at all.';
-  const footerSentenceTwo = 'All sources of slow are identical in behavior (Chronofield+, Slow Aura card, Poison Swamp 25% slow, Negative Mass Projector). All of these are in the "Slow" row.';
-  const footerCredit = 'Credit: @rageboulderfist.';
-  const footerFont = style.footerFont;
-  const width = tableWidth;
+  const tableWidth = colWidths.reduce((sum, width) => sum + width, 0);
+  const footerSentenceOne = enemyResistanceFooterSentenceOne;
+  const footerSentenceTwo = enemyResistanceFooterSentenceTwo;
+  const footerCredit = enemyResistanceFooterCredit;
   const ctxFooter = createCanvas(1, 1).getContext('2d');
-  ctxFooter.font = footerFont;
+  ctxFooter.font = style.footerFont;
   const footerLines = [
-    ...wrapLinesForWidth(ctxFooter, footerSentenceOne, width - cellPadding * 2),
-    ...wrapLinesForWidth(ctxFooter, footerSentenceTwo, width - cellPadding * 2),
+    ...wrapLinesForWidth(ctxFooter, footerSentenceOne, tableWidth - cellPadding * 2),
+    ...wrapLinesForWidth(ctxFooter, footerSentenceTwo, tableWidth - cellPadding * 2),
     '',
-    ...wrapLinesForWidth(ctxFooter, footerCredit, width - cellPadding * 2)
+    ...wrapLinesForWidth(ctxFooter, footerCredit, tableWidth - cellPadding * 2),
   ];
   const footerHeight = footerLines.length * 20 + 12;
-  const height = tableHeight + legendHeight + footerHeight + style.margin;
 
-  const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext('2d');
+  return renderSimpleTableChart({
+    data: CHART_DATA,
+    style,
+    titleYOffset: 0,
+    headerRowHeight: rowHeight,
+    bottomPadding: legendHeight + footerHeight + style.margin,
+    customCellRenderer: ({ ctx, rowIndex, colIndex, x, y, width, height, value }) => {
+      const rowBg = rowIndex % 2 === 0 ? style.evenRowBg : style.oddRowBg;
+      const isLabelColumn = colIndex === 0;
+      const cellTone = isLabelColumn
+        ? 'neutral'
+        : normalizeCell(ROWS[rowIndex].cells[colIndex - 1]).type;
+      const cellBg = isLabelColumn ? rowBg : toneToColor(cellTone);
+      const cellTextColor = isLabelColumn ? style.textColor : '#000';
 
-  // Background
-  ctx.fillStyle = style.oddRowBg;
-  ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = cellBg;
+      ctx.fillRect(x, y, width, height);
+      ctx.strokeStyle = style.borderColor;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, width, height);
 
-  // Header row
-  let y = 0;
-  let x = 0;
-  ctx.font = headerFont;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  for (let ci = 0; ci < COLUMNS.length; ci++) {
-    const w = colWidths[ci];
-    ctx.fillStyle = headerBg;
-    ctx.fillRect(x, y, w, rowHeight);
-    ctx.strokeStyle = borderColor;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x, y, w, rowHeight);
-    ctx.fillStyle = headerText;
-    wrapText(ctx, COLUMNS[ci], x + w / 2, y + rowHeight / 2, w - cellPadding * 2);
-    x += w;
-  }
+      ctx.fillStyle = cellTextColor;
+      ctx.font = style.cellFont || style.font;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      wrapText(ctx, String(value || ''), x + width / 2, y + height / 2, width - style.cellPadding * 2);
+      return true;
+    },
+    afterRows: ({ ctx, y, tableWidth }) => {
+      // Legend
+      let legendX = style.cellPadding;
+      const legendY = y + 8;
+      ctx.font = style.subheaderFont;
+      for (const entry of LEGEND) {
+        const boxSize = 18;
+        ctx.fillStyle = toneToColor(entry.type);
+        ctx.fillRect(legendX, legendY, boxSize, boxSize);
+        ctx.strokeStyle = style.borderColor;
+        ctx.strokeRect(legendX, legendY, boxSize, boxSize);
+        ctx.fillStyle = style.textColor;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(entry.label, legendX + boxSize + 8, legendY + boxSize / 2);
+        legendX += boxSize + 120;
+      }
 
-  // Body rows
-  ctx.font = cellFont;
-  for (let ri = 0; ri < ROWS.length; ri++) {
-    const row = ROWS[ri];
-    y = rowHeight * (ri + 1);
-    x = 0;
-    const rowBg = ri % 2 === 0 ? evenRowBg : oddRowBg;
-    // Label cell
-    ctx.fillStyle = rowBg;
-    ctx.fillRect(x, y, colWidths[0], rowHeight);
-    ctx.strokeStyle = borderColor;
-    ctx.strokeRect(x, y, colWidths[0], rowHeight);
-    ctx.fillStyle = textColor;
-    wrapText(ctx, row.label, x + colWidths[0] / 2, y + rowHeight / 2, colWidths[0] - cellPadding * 2);
-    x += colWidths[0];
-
-    // Data cells
-    for (let ci = 1; ci < COLUMNS.length; ci++) {
-      const cell = normalizeCell(row.cells[ci - 1]);
-      const bg = toneToColor(cell.type);
-      ctx.fillStyle = bg;
-      ctx.fillRect(x, y, colWidths[ci], rowHeight);
-      ctx.strokeStyle = borderColor;
-      ctx.strokeRect(x, y, colWidths[ci], rowHeight);
-      ctx.fillStyle = '#000';
-      ctx.font = cellFont;
-      wrapText(ctx, cell.text || '', x + colWidths[ci] / 2, y + rowHeight / 2, colWidths[ci] - cellPadding * 2);
-      x += colWidths[ci];
-    }
-  }
-
-  // Legend
-  y = tableHeight + 8;
-  x = cellPadding;
-  ctx.font = style.subheaderFont;
-  for (const entry of LEGEND) {
-    const boxSize = 18;
-    ctx.fillStyle = toneToColor(entry.type);
-    ctx.fillRect(x, y, boxSize, boxSize);
-    ctx.strokeStyle = borderColor;
-    ctx.strokeRect(x, y, boxSize, boxSize);
-    ctx.fillStyle = style.textColor;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(entry.label, x + boxSize + 8, y + boxSize / 2);
-    x += boxSize + 120;
-  }
-
-  // Footer
-  ctx.font = footerFont;
-  ctx.fillStyle = style.footerColor;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  const footerY = tableHeight + legendHeight;
-  let lineY = footerY;
-  for (const line of footerLines) {
-    ctx.fillText(line, cellPadding, lineY);
-    lineY += 20;
-  }
-
-  return canvas.toBuffer('image/png');
+      // Footer
+      const footerY = y + legendHeight;
+      ctx.fillStyle = style.footerBg;
+      ctx.fillRect(0, footerY, tableWidth, footerHeight);
+      ctx.font = style.footerFont;
+      ctx.fillStyle = style.footerColor;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      let lineY = footerY;
+      for (const line of footerLines) {
+        ctx.fillText(line, style.cellPadding, lineY);
+        lineY += 20;
+      }
+    },
+  });
 }
 
 function wrapText(ctx, text, centerX, centerY, maxWidth) {

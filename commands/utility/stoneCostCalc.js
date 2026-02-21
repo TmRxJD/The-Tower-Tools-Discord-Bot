@@ -1,6 +1,6 @@
 const { createCanvas } = require('canvas');
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder, AttachmentBuilder, MessageFlags } = require('discord.js');
-const UW_DATA = require('./upgradesData/uwData.js');
+const { uwStoneChartData: UW_DATA } = require('../../../../packages/platform/dist/tools/uw-stone-chart-data.js');
 const { getUserUWSettings, saveUserUWSettings } = require('../services/dbHandler.js');
 const path = require('path');
 
