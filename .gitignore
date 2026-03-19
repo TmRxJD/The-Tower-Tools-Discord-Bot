@@ -13,6 +13,7 @@ config.dev.json
 bot-token.txt
 google_credentials.json
 .env
+.env.dev
 .env.local
 .env.*.local
 .env.*

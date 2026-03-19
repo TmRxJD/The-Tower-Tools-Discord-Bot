@@ -1,48 +1,51 @@
 {
-  "name": "tracker-bot",
-  "version": "1.0.0",
-  "main": "tracker-bot.js",
+  "name": "tools-bot-ts",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.8.1",
+  "description": "TypeScript rewrite of the Tower Tools bot",
+  "main": "dist/bot.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "cross-env DEPLOYMENT_MODE=dev NODE_ENV=development ts-node-dev --respawn --transpile-only src/bot.ts",
+    "build": "rimraf dist && tsc -p tsconfig.json",
+    "start": "cross-env DEPLOYMENT_MODE=prod NODE_ENV=production node dist/bot.js",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "lint:fix": "eslint \"src/**/*.ts\" --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "register:commands": "cross-env DEPLOYMENT_MODE=dev BOT_LOG_LEVEL=error ts-node src/scripts/register-commands.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
-    "@gutenye/ocr-node": "^1.4.8",
-    "axios": "^1.9.0",
-    "better-sqlite3": "^11.7.0",
-    "chartjs-node-canvas": "^5.0.0",
-    "cheerio": "^1.0.0",
-    "cors": "^2.8.5",
-    "csv-parser": "^3.2.0",
-    "discord.js": "^14.18.0",
+    "@napi-rs/canvas": "^0.1.93",
+    "@tmrxjd/platform": "0.1.8",
+    "canvas": "^3.2.1",
+    "dexie": "^4.3.0",
+    "discord.js": "^14.24.0",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "express-sharp": "^4.2.41",
-    "form-data": "^4.0.1",
-    "fs": "^0.0.1-security",
-    "googleapis": "^144.0.0",
-    "module-alias": "^2.2.3",
-    "multer": "^1.4.5-lts.1",
-    "node-fetch": "^2.7.0",
-    "node-schedule": "^2.1.1",
-    "onnxruntime-node": "^1.20.1",
-    "openai": "^4.85.3",
-    "path": "^0.12.7",
-    "punycode": "^2.3.1",
-    "puppeteer": "^23.11.1",
-    "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "quickchart-js": "^3.1.3",
-    "sharp": "^0.33.5",
+    "hyperformula": "^3.2.0",
+    "indexeddb-js": "^0.0.14",
+    "node-appwrite": "^22.1.3",
     "sqlite3": "^5.1.7",
-    "string-similarity": "^4.0.4",
-    "tesseract.js": "^6.0.0",
-    "whatwg-url": "^14.1.0"
+    "zod": "^3.23.8"
   },
-  "volta": {
-    "node": "22.20.0"
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "@types/node": "^20.11.30",
+    "@typescript-eslint/eslint-plugin": "^8.26.0",
+    "@typescript-eslint/parser": "^8.26.0",
+    "cross-env": "^7.0.3",
+    "eslint": "^9.21.0",
+    "globals": "^15.15.0",
+    "rimraf": "^5.0.7",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.6.3",
+    "vitest": "^4.0.18"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "sqlite3"
+    ]
   }
 }
