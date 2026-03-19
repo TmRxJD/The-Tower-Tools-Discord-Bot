@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ComponentType } from 'discord-api-types/v10';
+import { ComponentType } from 'discord.js';
 import {
   createChartCommandComponents,
   normalizeChartState,
@@ -35,8 +35,10 @@ describe('chart-command-helpers', () => {
 
     const rows = createChartCommandComponents(state);
     const filterRow = rows[3]?.toJSON();
-  const filterComponent = filterRow?.components?.[0];
-  const options = filterComponent?.type === ComponentType.StringSelect ? filterComponent.options : [];
+    const filterComponent = filterRow?.components?.[0];
+    const options = filterComponent?.type === ComponentType.StringSelect && 'options' in filterComponent
+      ? filterComponent.options
+      : [];
 
     expect(rows).toHaveLength(5);
     expect(options).toHaveLength(4);
