@@ -13,6 +13,8 @@ import type { CommandModule } from '../core/command-types';
 import {
   buildThornsBaseChart,
   buildThornsWallChart,
+  normalizeThornsSharedState,
+  type ThornsSharedState,
   type TournamentTier,
 } from '@tmrxjd/platform/tools';
 import { getBotConfig } from '../config/bot-config';
@@ -23,45 +25,11 @@ import { getUserCommandSharedState, reconcileUserCommandSharedState, saveUserCom
 import { resolveUserStorageState } from '../services/user-storage-resolution';
 import { runCloudReconcileUi } from '../services/cloud-reconcile-ui';
 import { showModalAndAwaitSubmit } from '../services/modal-submit';
+import type { ToolsBotClient } from '../core/tools-bot-client';
 
 const botConfig = getBotConfig();
 const thornsConfig = botConfig.commands.thorns;
 const THORNS_SHARE_BUTTON_ID = 'thorns_share';
-
-type ThornsSharedState = {
-  baseThorns: number;
-  tier: number;
-  pcLevel: number;
-  pcMasteryLevel: number;
-  bcLabLevel: number;
-  bcReductionLabLevel: number;
-  pcReductionLabLevel: number;
-  tournamentTier: TournamentTier;
-  heatWave: number;
-  sharpFortitude: boolean;
-};
-
-function normalizeThornsSharedState(input: Record<string, unknown> | null): ThornsSharedState {
-  const validTournamentChoices = new Set<string>(thornsConfig.tournamentChoices.map(choice => choice.value));
-  const candidateTournament = typeof input?.tournamentTier === 'string'
-    ? input.tournamentTier.toLowerCase()
-    : '';
-
-  return {
-    baseThorns: Number.isFinite(Number(input?.baseThorns)) ? Math.max(0, Math.min(600, Math.floor(Number(input?.baseThorns)))) : thornsConfig.defaults.baseThorns,
-    tier: Number.isFinite(Number(input?.tier)) ? Math.max(1, Math.min(21, Math.floor(Number(input?.tier)))) : thornsConfig.defaults.tier,
-    pcLevel: Number.isFinite(Number(input?.pcLevel)) ? Math.max(0, Math.min(7, Math.floor(Number(input?.pcLevel)))) : thornsConfig.defaults.pcLevel,
-    pcMasteryLevel: Number.isFinite(Number(input?.pcMasteryLevel)) ? Math.max(0, Math.min(9, Math.floor(Number(input?.pcMasteryLevel)))) : thornsConfig.defaults.pcMasteryLevel,
-    bcLabLevel: Number.isFinite(Number(input?.bcLabLevel)) ? Math.max(0, Math.min(10, Math.floor(Number(input?.bcLabLevel)))) : thornsConfig.defaults.bcLabLevel,
-    bcReductionLabLevel: Number.isFinite(Number(input?.bcReductionLabLevel)) ? Math.max(0, Math.min(20, Math.floor(Number(input?.bcReductionLabLevel)))) : thornsConfig.defaults.bcReductionLabLevel,
-    pcReductionLabLevel: Number.isFinite(Number(input?.pcReductionLabLevel)) ? Math.max(0, Math.min(20, Math.floor(Number(input?.pcReductionLabLevel)))) : thornsConfig.defaults.pcReductionLabLevel,
-    tournamentTier: validTournamentChoices.has(candidateTournament)
-      ? (candidateTournament as TournamentTier)
-      : thornsConfig.defaults.tournamentTier,
-    heatWave: Number.isFinite(Number(input?.heatWave)) ? Math.max(0, Math.min(1000, Math.floor(Number(input?.heatWave)))) : thornsConfig.defaults.heatWave,
-    sharpFortitude: typeof input?.sharpFortitude === 'boolean' ? input.sharpFortitude : thornsConfig.defaults.sharpFortitude,
-  };
-}
 
 function formatTournamentLabel(value: string): string {
   const match = thornsConfig.tournamentChoices.find(choice => choice.value === value);
@@ -377,6 +345,15 @@ export const thornsCommand: CommandModule = {
       time: thornsConfig.behavior.collectorTimeoutMs,
       filter: i => i.user.id === interaction.user.id,
     });
+    const client = interaction.client as ToolsBotClient;
+    const scopedSessionId = `thorns:${interaction.id}`;
+    client.scopedInteractionSessions.register({
+      sessionId: scopedSessionId,
+      ownerUserId: interaction.user.id,
+      messageId: reply.id,
+      modalCustomIds: [thornsConfig.ids.coreModal, thornsConfig.ids.advancedModal],
+      ttlMs: thornsConfig.behavior.collectorTimeoutMs,
+    });
 
     collector.on('collect', async componentInteraction => {
       if (componentInteraction.isButton() && componentInteraction.customId === THORNS_SHARE_BUTTON_ID) {
@@ -526,6 +503,7 @@ export const thornsCommand: CommandModule = {
     });
 
     collector.on('end', async () => {
+      client.scopedInteractionSessions.unregister(scopedSessionId);
       await interaction.editReply({
         content: thornsConfig.ui.sessionTimedOut,
         embeds: [],

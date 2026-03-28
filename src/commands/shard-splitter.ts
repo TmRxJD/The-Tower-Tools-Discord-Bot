@@ -33,6 +33,7 @@ import { getUserShardSplitterState, reconcileUserShardSplitterState, saveUserSha
 import { resolveUserStorageState } from '../services/user-storage-resolution';
 import { runCloudReconcileUi } from '../services/cloud-reconcile-ui';
 import { showModalAndAwaitSubmit } from '../services/modal-submit';
+import type { ToolsBotClient } from '../core/tools-bot-client';
 
 const shardSplitterConfig = getBotConfig().commands.shardSplitter;
 const SHARD_SHARE_BUTTON_ID = 'shard_share';
@@ -461,6 +462,15 @@ export const shardSplitterCommand = createChatInputCommand(data, async interacti
     time: shardSplitterConfig.behavior.collectorTimeoutMs,
     filter: i => i.user.id === interaction.user.id,
   });
+  const client = interaction.client as ToolsBotClient;
+  const scopedSessionId = `shard:${interaction.id}`;
+  client.scopedInteractionSessions.register({
+    sessionId: scopedSessionId,
+    ownerUserId: interaction.user.id,
+    messageId: reply.id,
+    modalCustomIds: [shardSplitterConfig.ids.settingsModal, shardSplitterConfig.ids.levelsModal],
+    ttlMs: shardSplitterConfig.behavior.collectorTimeoutMs,
+  });
 
   collector.on('collect', async componentInteraction => {
     if (componentInteraction.user.id !== interaction.user.id) {
@@ -734,6 +744,7 @@ export const shardSplitterCommand = createChatInputCommand(data, async interacti
   });
 
   collector.on('end', async () => {
+    client.scopedInteractionSessions.unregister(scopedSessionId);
     await interaction.editReply({ components: [] }).catch(() => {});
   });
 });

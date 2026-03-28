@@ -13,6 +13,7 @@ import { getUserCommandSharedState, reconcileUserCommandSharedState, saveUserCom
 import { resolveUserStorageState } from '../services/user-storage-resolution';
 import { runCloudReconcileUi } from '../services/cloud-reconcile-ui';
 import { showModalAndAwaitSubmit } from '../services/modal-submit';
+import type { ToolsBotClient } from '../core/tools-bot-client';
 import {
   buildNormalRows,
   buildWorkshopComponents,
@@ -383,6 +384,15 @@ export const workshopCommand: CommandModule = {
       time: workshopConfig.behavior.collectorTimeoutMs,
       filter: i => i.user.id === interaction.user.id,
     });
+    const client = interaction.client as ToolsBotClient;
+    const scopedSessionId = `workshop:${interaction.id}`;
+    client.scopedInteractionSessions.register({
+      sessionId: scopedSessionId,
+      ownerUserId: interaction.user.id,
+      messageId: reply.id,
+      modalCustomIds: [workshopConfig.ids.valuesModal],
+      ttlMs: workshopConfig.behavior.collectorTimeoutMs,
+    });
 
     collector.on('collect', async componentInteraction => {
       if (componentInteraction.isButton() && componentInteraction.customId === WORKSHOP_SHARE_BUTTON_ID) {
@@ -494,6 +504,7 @@ export const workshopCommand: CommandModule = {
     });
 
     collector.on('end', async () => {
+      client.scopedInteractionSessions.unregister(scopedSessionId);
       await interaction.editReply({ content: workshopConfig.ui.sessionTimedOut, embeds: [], components: [] }).catch(() => {});
     });
   },

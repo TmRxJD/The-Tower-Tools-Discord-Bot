@@ -9,6 +9,7 @@ import {
   SlashCommandBuilder,
 } from 'discord.js';
 import type { CommandModule } from '../core/command-types';
+import type { ToolsBotClient } from '../core/tools-bot-client';
 import { getBotConfig } from '../config/bot-config';
 import { logger } from '../core/logger';
 import {
@@ -84,6 +85,15 @@ async function attachAskShareCollector(
     return;
   }
 
+  const client = interaction.client as ToolsBotClient;
+  const scopedSessionId = `ask:${interaction.id}`;
+  client.scopedInteractionSessions.register({
+    sessionId: scopedSessionId,
+    ownerUserId: interaction.user.id,
+    messageId: replyMessage.id,
+    ttlMs: 15 * 60 * 1000,
+  });
+
   const collector = replyMessage.createMessageComponentCollector({
     time: 15 * 60 * 1000,
     filter: componentInteraction => componentInteraction.user.id === interaction.user.id && componentInteraction.customId === ASK_SHARE_BUTTON_ID,
@@ -123,6 +133,10 @@ async function attachAskShareCollector(
         });
       }
     }
+  });
+
+  collector.on('end', () => {
+    client.scopedInteractionSessions.unregister(scopedSessionId);
   });
 }
 

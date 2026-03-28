@@ -1,5 +1,8 @@
+import { createHash } from 'node:crypto';
 import { GatewayIntentBits } from 'discord.js';
 import { loadConfig, getAppConfig } from './config';
+import { createBotBootstrapContext } from './core/bootstrap-contract';
+import { acquireSharedDiscordTokenLock, acquireSingleInstanceLock } from './core/single-instance-lock';
 import { ToolsBotClient } from './core/tools-bot-client';
 import { logger } from './core/logger';
 import { registerInteractionRouter } from './core/interaction-router';
@@ -9,31 +12,79 @@ import { registerComponentHandlers } from './interactions';
 import { assertToolsBotPersistentStorage, getToolsBotStorageStatus } from './services/idb';
 import { createPersistence } from './persistence';
 import { prewarmTrackerAiAskRuntime } from './services/trackerai-ask';
+import { stopReminderScheduler } from './services/reminder-scheduler';
+
+function registerShutdownHandlers(cleanup: (reason: string, error?: unknown) => Promise<void>): void {
+  process.once('SIGINT', () => {
+    void cleanup('SIGINT');
+  });
+  process.once('SIGTERM', () => {
+    void cleanup('SIGTERM');
+  });
+  process.once('unhandledRejection', (reason) => {
+    void cleanup('unhandledRejection', reason);
+  });
+  process.once('uncaughtException', (error) => {
+    void cleanup('uncaughtException', error);
+  });
+}
 
 async function bootstrap() {
   loadConfig();
   const appConfig = getAppConfig();
+  const releaseInstanceLock = await acquireSingleInstanceLock();
+  const tokenLockKey = createHash('sha256').update(appConfig.discord.token).digest('hex').slice(0, 16);
+  const releaseSharedTokenLock = await acquireSharedDiscordTokenLock(tokenLockKey, `A local Discord bot process using client ${appConfig.discord.clientId}`);
+  let cleanupStarted = false;
 
-  await assertToolsBotPersistentStorage();
-  const storageStatus = await getToolsBotStorageStatus();
-  logger.info('ToolsBot sqlite storage initialized', storageStatus);
-  void prewarmTrackerAiAskRuntime();
+  const cleanup = async (reason: string, error?: unknown) => {
+    if (cleanupStarted) {
+      return;
+    }
 
-  const client = new ToolsBotClient(
-    {
-      intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
-    },
-    appConfig
-  );
+    cleanupStarted = true;
+    stopReminderScheduler();
+    if (error) {
+      logger.error(`ToolsBot shutting down after ${reason}`, error);
+      process.exitCode = 1;
+    }
 
-  client.persistence = createPersistence();
+    await releaseSharedTokenLock().catch(() => null);
+    await releaseInstanceLock().catch(() => null);
+  };
 
-  client.commands.registerMany(commandModules);
-  registerEvents(client);
-  registerComponentHandlers(client);
-  registerInteractionRouter(client);
+  registerShutdownHandlers(cleanup);
 
-  await client.login(appConfig.discord.token);
+  try {
+    await assertToolsBotPersistentStorage();
+    const storageStatus = await getToolsBotStorageStatus();
+    logger.info('ToolsBot sqlite storage initialized', storageStatus);
+    void prewarmTrackerAiAskRuntime();
+
+    const client = new ToolsBotClient(
+      {
+        intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+      },
+      appConfig
+    );
+    const startup = createBotBootstrapContext(client, appConfig);
+
+    startup.client.persistence = createPersistence();
+
+    startup.client.commands.registerMany(commandModules);
+    registerEvents(startup.client);
+    registerComponentHandlers(startup.client);
+    registerInteractionRouter(startup.client);
+
+    await startup.client.login(startup.runtime.loginToken);
+
+    startup.client.once('shardDisconnect', () => {
+      void cleanup('shardDisconnect');
+    });
+  } catch (error) {
+    await cleanup('bootstrap failure', error);
+    throw error;
+  }
 }
 
 void bootstrap().catch(error => {

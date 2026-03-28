@@ -4,11 +4,13 @@ import { loadUserLabSettingsCloud, saveUserLabSettingsCloud } from './user-lab-c
 import { resolveCanonicalAppwriteUserId } from './identity';
 import {
   buildSyncedStateReconcileResult,
-  defaultSharedLabsSettings,
-  normalizeSharedLabsSettings,
+  defaultUserLabSettings,
+  normalizeUserLabSettings,
   saveSyncedToolState,
+  type UserLabSettings,
 } from '@tmrxjd/platform/tools';
 import { syncCloudOutboxState } from './cloud-sync-outbox';
+import { getEffectiveUserSharedSettings } from './user-shared-settings-db';
 
 const LAB_SETTINGS_SCOPE = 'lab-settings';
 
@@ -17,19 +19,7 @@ type LabCloudContext = {
   usernameCandidates?: string[];
 };
 
-export interface LabLevelRange {
-  startLevel: number;
-  targetLevel: number;
-}
-
-export interface UserLabSettings {
-  labSpeed: number;
-  labRelic: number;
-  labDiscount: number;
-  speedUp: number;
-  hideMaxedLabs: boolean;
-  labLevels: Record<string, LabLevelRange>;
-}
+export type { UserLabSettings } from '@tmrxjd/platform/tools';
 
 export type LabReconcileResult = {
   autoCloudEnabled: boolean;
@@ -43,23 +33,7 @@ export type LabReconcileResult = {
   applyLocalToCloud: () => Promise<void>;
 };
 
-const DEFAULT_SETTINGS: UserLabSettings = {
-  ...defaultSharedLabsSettings,
-  hideMaxedLabs: true,
-  labLevels: {},
-};
-
-function normalizeLabSettings(input: UserLabSettings): UserLabSettings {
-  const shared = normalizeSharedLabsSettings(input);
-  return {
-    labSpeed: shared.labSpeed,
-    labRelic: shared.labRelic,
-    labDiscount: shared.labDiscount,
-    speedUp: shared.speedUp,
-    hideMaxedLabs: input.hideMaxedLabs !== false,
-    labLevels: input.labLevels ?? {},
-  };
-}
+const DEFAULT_SETTINGS: UserLabSettings = { ...defaultUserLabSettings, labLevels: {} };
 
 function hasMeaningfulLabState(settings: UserLabSettings | null): boolean {
   if (!settings) return false;
@@ -73,8 +47,12 @@ function hasMeaningfulLabState(settings: UserLabSettings | null): boolean {
 }
 
 async function isCloudSyncEnabledForUser(userId: string): Promise<boolean> {
-  void userId;
-  return true;
+  try {
+    return (await getEffectiveUserSharedSettings(userId)).cloudSyncEnabled;
+  } catch (error) {
+    logger.warn('Failed to resolve shared settings for lab sync gating', error);
+    return false;
+  }
 }
 
 function resolveLabCloudUserId(userId: string): string {
@@ -97,20 +75,17 @@ async function loadLocalUserLabSettings(userId: string): Promise<{ state: UserLa
   }
 
   return {
-    state: {
-      labSpeed: Number(row.labSpeed ?? 0) || 0,
-      labRelic: Number(row.labRelic ?? 0) || 0,
-      labDiscount: Number(row.labDiscount ?? 0) || 0,
-      speedUp: Math.max(1, Number(row.speedUp ?? 1) || 1),
-      hideMaxedLabs: Boolean(row.hideMaxedLabs),
+    state: normalizeUserLabSettings({
+      ...DEFAULT_SETTINGS,
+      ...row,
       labLevels: row.labLevels ?? {},
-    },
+    }),
     updatedAt: Number.isFinite(Number(row.updatedAt)) ? Number(row.updatedAt) : null,
   };
 }
 
 async function saveLocalUserLabSettings(userId: string, settings: UserLabSettings): Promise<void> {
-  const normalized = normalizeLabSettings(settings);
+  const normalized = normalizeUserLabSettings(settings);
   const database = getToolsBotDb();
   await database.labSettings.put({
     userId,
@@ -138,7 +113,7 @@ export async function saveUserLabSettings(userId: string, settings: UserLabSetti
   try {
     await saveSyncedToolState({
       state: settings,
-      normalize: normalizeLabSettings,
+      normalize: normalizeUserLabSettings,
       saveLocal: async normalized => saveLocalUserLabSettings(userId, normalized),
       isCloudSyncEnabled: async () => await isCloudSyncEnabledForUser(userId),
       queueCloudSync: async normalized => {
@@ -178,7 +153,7 @@ export async function reconcileUserLabSettings(userId: string, context: LabCloud
       updatedAt: cloud?.updatedAt ?? null,
     },
     autoCloudEnabled,
-    normalize: input => normalizeLabSettings(input ?? { ...DEFAULT_SETTINGS, labLevels: {} }),
+    normalize: input => normalizeUserLabSettings(input ?? { ...DEFAULT_SETTINGS, labLevels: {} }),
     saveLocal: async state => saveLocalUserLabSettings(userId, state),
     queueCloudSync: async state => {
       const cloudUserId = resolveLabCloudUserId(userId);

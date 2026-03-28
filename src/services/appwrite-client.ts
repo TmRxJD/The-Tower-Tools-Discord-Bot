@@ -1,4 +1,5 @@
 import { Client, Databases, Storage } from 'node-appwrite';
+import { createAppwriteClientBundle, resolveAppwriteCredential } from '@tmrxjd/platform/node';
 import { getAppConfig } from '../config';
 import { logger } from '../core/logger';
 
@@ -26,23 +27,30 @@ export function getAppwriteClient(): AppwriteClientBundle | null {
     return null;
   }
 
-  const client = new Client()
-    .setEndpoint(cfg.appwrite.endpoint)
-    .setProject(cfg.appwrite.projectId);
-
-  const apiKey = cfg.appwrite.apiKey?.trim();
-  if (apiKey) {
-    client.setKey(apiKey);
-  } else if (!hasLoggedMissingCredential) {
-    logger.warn('No Appwrite API key configured for ToolsBot; shard cloud sync is disabled.');
-    hasLoggedMissingCredential = true;
+  const credential = resolveAppwriteCredential({
+    apiKey: cfg.appwrite.apiKey,
+  });
+  if (credential.kind === 'none') {
+    if (!hasLoggedMissingCredential) {
+      logger.warn('No Appwrite API key configured for ToolsBot; shard cloud sync is disabled.');
+      hasLoggedMissingCredential = true;
+    }
     return null;
   }
 
+  const bundle = createAppwriteClientBundle({
+    client: new Client(),
+    endpoint: cfg.appwrite.endpoint,
+    projectId: cfg.appwrite.projectId,
+    credential,
+    createDatabases: client => new Databases(client),
+    createStorage: client => new Storage(client),
+  });
+
   cachedBundle = {
-    client,
-    databases: new Databases(client),
-    storage: new Storage(client),
+    client: bundle.client,
+    databases: bundle.databases,
+    storage: bundle.storage,
   };
 
   return cachedBundle;

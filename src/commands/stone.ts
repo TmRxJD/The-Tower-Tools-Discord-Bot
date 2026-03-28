@@ -20,6 +20,8 @@ import {
   formatGroupedToolNumber,
   getDefaultLevelRange,
   getUwStatMaxLevel,
+  normalizeStoneSharedState,
+  type StoneSharedState,
   sumUwStatCostsBetween,
   uwStoneChartData,
 } from '@tmrxjd/platform/tools'
@@ -31,32 +33,10 @@ import { getUserCommandSharedState, reconcileUserCommandSharedState, saveUserCom
 import { resolveUserStorageState } from '../services/user-storage-resolution'
 import { runCloudReconcileUi } from '../services/cloud-reconcile-ui'
 import { showModalAndAwaitSubmit } from '../services/modal-submit'
+import { ToolsBotClient } from '../core/tools-bot-client'
 
 const stoneConfig = getBotConfig().commands.stone
 const STONE_SHARE_BUTTON_ID = 'stone_share'
-
-type StoneSharedState = {
-  weaponName: string
-  selectedStats: string[]
-  startLevel: number
-  targetLevel: number | null
-}
-
-function normalizeStoneSharedState(input: Record<string, unknown> | null): StoneSharedState {
-  const parsedTarget = Number(input?.targetLevel)
-  const selectedStats = Array.isArray(input?.selectedStats)
-    ? input.selectedStats.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    : []
-  const legacyStatName = typeof input?.statName === 'string' && input.statName.trim().length > 0 && input.statName.trim().toLowerCase() !== 'all'
-    ? [input.statName]
-    : []
-  return {
-    weaponName: typeof input?.weaponName === 'string' ? input.weaponName : '',
-    selectedStats: selectedStats.length > 0 ? selectedStats : legacyStatName,
-    startLevel: Number.isFinite(Number(input?.startLevel)) ? Math.max(0, Math.floor(Number(input?.startLevel))) : stoneConfig.defaults.startLevel,
-    targetLevel: Number.isFinite(parsedTarget) ? Math.max(0, Math.floor(parsedTarget)) : null,
-  }
-}
 
 const UW_DATA = uwStoneChartData
 
@@ -502,6 +482,23 @@ export const stoneCommand: CommandModule = {
       time: stoneConfig.behavior.collectorTimeoutMs,
       filter: i => i.user.id === interaction.user.id,
     })
+    const client = interaction.client as ToolsBotClient
+    const scopedSessionId = `stone:${interaction.id}`
+    client.scopedInteractionSessions.register({
+      sessionId: scopedSessionId,
+      ownerUserId: interaction.user.id,
+      messageId: reply.id,
+      componentCustomIds: [
+        STONE_SHARE_BUTTON_ID,
+        stoneConfig.ids.weaponSelect,
+        stoneConfig.ids.statSelect,
+        stoneConfig.ids.setRange,
+      ],
+      modalCustomIds: [
+        stoneConfig.ids.rangeModal,
+      ],
+      ttlMs: stoneConfig.behavior.collectorTimeoutMs,
+    })
 
     collector.on('collect', async componentInteraction => {
       if (componentInteraction.isButton() && componentInteraction.customId === STONE_SHARE_BUTTON_ID) {
@@ -604,6 +601,7 @@ export const stoneCommand: CommandModule = {
     })
 
     collector.on('end', async () => {
+      client.scopedInteractionSessions.unregister(scopedSessionId)
       await interaction.editReply({
         content: stoneConfig.ui.sessionTimedOut,
         embeds: [],

@@ -32,6 +32,7 @@ import { resolveUserStorageState } from '../services/user-storage-resolution'
 import { runCloudReconcileUi } from '../services/cloud-reconcile-ui'
 import { normalizeBotsSharedState, hasMeaningfulBotsState } from '../services/bots-command-state'
 import { showModalAndAwaitSubmit } from '../services/modal-submit'
+import type { ToolsBotClient } from '../core/tools-bot-client'
 
 const botsConfig = getBotConfig().commands.bots
 const BOTS_SHARE_BUTTON_ID = 'bots_share'
@@ -571,6 +572,15 @@ export const botsCommand: CommandModule = {
       time: botsConfig.behavior.collectorTimeoutMs,
       filter: i => i.user.id === interaction.user.id,
     })
+    const client = interaction.client as ToolsBotClient
+    const scopedSessionId = `bots:${interaction.id}`
+    client.scopedInteractionSessions.register({
+      sessionId: scopedSessionId,
+      ownerUserId: interaction.user.id,
+      messageId: reply.id,
+      modalCustomIds: [botsConfig.ids.levelsModal],
+      ttlMs: botsConfig.behavior.collectorTimeoutMs,
+    })
 
     collector.on('collect', async componentInteraction => {
       if (componentInteraction.user.id !== interaction.user.id) {
@@ -722,6 +732,7 @@ export const botsCommand: CommandModule = {
     })
 
     collector.on('end', async () => {
+      client.scopedInteractionSessions.unregister(scopedSessionId)
       try {
         await interaction.editReply({
           content: botsConfig.ui.sessionTimedOut,

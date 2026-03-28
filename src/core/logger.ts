@@ -17,11 +17,11 @@ function normalizeLogLevel(value?: string): LogLevel {
     case 'silent':
       return value.toLowerCase() as LogLevel;
     default:
-      return 'silent';
+      return process.env.NODE_ENV === 'development' ? 'info' : 'warn';
   }
 }
 
-const configuredLogLevel = normalizeLogLevel(process.env.BOT_LOG_LEVEL ?? process.env.LOG_LEVEL);
+const configuredLogLevel = normalizeLogLevel(process.env.BOT_LOG_LEVEL);
 
 function shouldLog(level: Exclude<LogLevel, 'silent'>): boolean {
   if (configuredLogLevel === 'silent') {

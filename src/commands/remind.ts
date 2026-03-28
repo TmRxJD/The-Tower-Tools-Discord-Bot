@@ -199,6 +199,14 @@ export const remindCommand: CommandModule = {
       filter: componentInteraction => componentInteraction.user.id === userId,
       time: remindBehavior.collectorTimeoutMs,
     });
+    const client = interaction.client as ToolsBotClient;
+    const scopedSessionId = `remind:${interaction.id}`;
+    client.scopedInteractionSessions.register({
+      sessionId: scopedSessionId,
+      ownerUserId: interaction.user.id,
+      messageId: message.id,
+      ttlMs: remindBehavior.collectorTimeoutMs,
+    });
 
     collector.on('collect', async componentInteraction => {
       if (componentInteraction.isStringSelectMenu() && componentInteraction.customId === `${remindIds.selectPrefix}${userId}`) {
@@ -247,6 +255,7 @@ export const remindCommand: CommandModule = {
     });
 
     collector.on('end', async () => {
+      client.scopedInteractionSessions.unregister(scopedSessionId);
       const disabledSelectRow = buildSelectRow();
       disabledSelectRow.components.forEach(component => component.setDisabled(true));
       const disabledButtonRow = buildButtonsRow(paused, showExact);

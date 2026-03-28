@@ -6,18 +6,22 @@ import {
   StringSelectMenuBuilder,
 } from 'discord.js';
 import {
-  createChartStudioProfileFromChartPath,
+  autoSelectSingleChartState,
+  type ChartState,
+  getAvailableChartStatLabels,
   getChartCategoryNames,
   getChartItemNames,
   getChartPath,
   getChartSubcategoryNames,
   hasChartRendererDefinition,
-  listStatGroupLabelsForDocument,
-  resolveEditableChartDocument,
+  normalizeChartState,
 } from '@tmrxjd/platform/tools';
 import { getBotConfig } from '../config/bot-config';
 import { brandCommandEmbed } from '../services/command-embed-branding';
 import type { ChartRenderSuccessResult } from '../services/chart-render';
+
+export { normalizeChartState } from '@tmrxjd/platform/tools';
+export type { ChartState } from '@tmrxjd/platform/tools';
 
 const chartConfig = getBotConfig().commands.chart;
 const toolsHubConfig = getBotConfig().common.toolsHub;
@@ -50,111 +54,12 @@ export function createChartCommandSessionIds(sessionId: string): ChartCommandSes
   };
 }
 
-export type ChartState = {
-  category: string | null;
-  subcategory: string | null;
-  item: string | null;
-  selectedStats: string[];
-};
-
-function getAvailableChartStatLabels(state: Pick<ChartState, 'category' | 'subcategory' | 'item'>): string[] {
-  const profile = state.category && state.subcategory && state.item
-    ? createChartStudioProfileFromChartPath(state.category, state.subcategory, state.item)
-    : null;
-  if (!profile) return [];
-
-  const document = resolveEditableChartDocument(profile.document, {
-    renderMode: 'view',
-    activeSectionIndex: 0,
-  }).document;
-
-  return listStatGroupLabelsForDocument(document);
-}
-
-function reconcileSelectedStats(state: ChartState): void {
-  const availableStats = getAvailableChartStatLabels(state);
-  if (availableStats.length === 0) {
-    state.selectedStats = [];
-    return;
-  }
-
-  const availableSet = new Set(availableStats);
-  const nextSelected = state.selectedStats.filter(stat => availableSet.has(stat));
-  state.selectedStats = nextSelected.length > 0 ? nextSelected : [...availableStats];
-}
-
-export function normalizeChartState(input: Record<string, unknown> | null): ChartState {
-  const category = typeof input?.category === 'string' && input.category.trim().length > 0
-    ? input.category
-    : null;
-  const subcategory = typeof input?.subcategory === 'string' && input.subcategory.trim().length > 0
-    ? input.subcategory
-    : null;
-  const item = typeof input?.item === 'string' && input.item.trim().length > 0
-    ? input.item
-    : null;
-  const selectedStats = Array.isArray(input?.selectedStats)
-    ? input.selectedStats.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    : [];
-
-  const categoryNames = new Set(getChartCategoryNames());
-  if (!category || !categoryNames.has(category)) {
-    return {
-      category: null,
-      subcategory: null,
-      item: null,
-      selectedStats: [],
-    };
-  }
-
-  const subcategoryNames = new Set(getChartSubcategoryNames(category));
-  if (!subcategory || !subcategoryNames.has(subcategory)) {
-    return {
-      category,
-      subcategory: null,
-      item: null,
-      selectedStats: [],
-    };
-  }
-
-  const itemNames = new Set(getChartItemNames(category, subcategory));
-  if (!item || !itemNames.has(item)) {
-    return {
-      category,
-      subcategory,
-      item: null,
-      selectedStats: [],
-    };
-  }
-
-  const normalizedState: ChartState = {
-    category,
-    subcategory,
-    item,
-    selectedStats,
-  };
-  reconcileSelectedStats(normalizedState);
-  return normalizedState;
-}
-
 export function autoSelectSingleOptions(state: ChartState): void {
-  if (!state.category) return;
-
-  if (!state.subcategory) {
-    const subcategories = getChartSubcategoryNames(state.category);
-    if (subcategories.length === 1) {
-      state.subcategory = subcategories[0];
-    }
-  }
-
-  if (state.subcategory && !state.item) {
-    const items = getChartItemNames(state.category, state.subcategory);
-    if (items.length === 1) {
-      state.item = items[0];
-    }
-  }
-
-  reconcileSelectedStats(state);
+  const nextState = autoSelectSingleChartState(state);
+  state.category = nextState.category;
+  state.subcategory = nextState.subcategory;
+  state.item = nextState.item;
+  state.selectedStats = nextState.selectedStats;
 }
 
 export function createBaseChartEmbed(state: ChartState): EmbedBuilder {

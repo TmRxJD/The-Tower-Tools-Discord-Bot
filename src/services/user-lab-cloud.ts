@@ -1,21 +1,23 @@
 import { getAppConfig } from '../config';
 import { logger } from '../core/logger';
 import { getAppwriteClient } from './appwrite-client';
+import { z } from 'zod';
 import { resolveCanonicalAppwriteUserId } from './identity';
 import { Query } from 'node-appwrite';
 import { resolveCloudUserIdCandidates } from './cloud-user-resolution';
-import { getDocumentOrNull } from './appwrite-document-utils';
-import type { UserLabSettings } from './user-lab-db';
+import { mutateCloudJsonBlobDocument, resolveDocumentByCandidates } from '@tmrxjd/platform/node';
 import {
-  defaultSharedLabsSettings,
-  normalizeSharedLabsSettings,
+  buildLabLevelRangesFromProgressRecords,
+  defaultUserLabSettings,
+  normalizeUserLabSettings,
   parseIsoTimestampToMillis,
   toObjectRecord,
+  userLabSettingsSchema,
+  type UserLabSettings,
 } from '@tmrxjd/platform/tools';
 
 const DEFAULT_LAB_SETTINGS: UserLabSettings = {
-  ...defaultSharedLabsSettings,
-  hideMaxedLabs: true,
+  ...defaultUserLabSettings,
   labLevels: {},
 };
 
@@ -74,16 +76,42 @@ type LegacyLabProgressDocument = {
   rangeTarget?: number | null;
 };
 
+const labsDocumentSchema = z.object({
+  data: z.string(),
+  version: z.number().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  $updatedAt: z.string().optional(),
+}).passthrough();
+
+const labBlobRecordSchema = z.object({
+  labName: z.string().optional(),
+  currentLevel: z.number().optional(),
+  rangeStart: z.number().optional(),
+  rangeTarget: z.number().optional(),
+}).passthrough();
+
+const labBlobSchema = z.object({
+  progress: z.object({
+    records: z.array(labBlobRecordSchema).optional(),
+  }).optional(),
+  settings: z.object({
+    labs: z.object({
+      labSpeed: z.number().optional(),
+      labRelic: z.number().optional(),
+      labDiscount: z.number().optional(),
+      speedUp: z.number().optional(),
+    }).passthrough().optional(),
+    ui: z.record(z.string(), z.unknown()).optional(),
+  }).passthrough().optional(),
+}).passthrough();
+
 function normalizeLocalLabSettings(input: Partial<UserLabSettings>): UserLabSettings {
-  const shared = normalizeSharedLabsSettings(input);
-  return {
-    labSpeed: shared.labSpeed,
-    labRelic: shared.labRelic,
-    labDiscount: shared.labDiscount,
-    speedUp: shared.speedUp,
-    hideMaxedLabs: input.hideMaxedLabs !== false,
+  return normalizeUserLabSettings({
+    ...DEFAULT_LAB_SETTINGS,
+    ...input,
     labLevels: input.labLevels ?? {},
-  };
+  });
 }
 
 function scoreLabSettings(settings: UserLabSettings | null): number {
@@ -111,25 +139,6 @@ function pickRicherLabSettings(primary: UserLabSettings | null, secondary: UserL
   return primary;
 }
 
-async function getLabsDocumentOrNull(userId: string): Promise<Record<string, unknown> | null> {
-  const cfg = getAppConfig();
-  if (!cfg.appwrite) {
-    return null;
-  }
-
-  const client = getAppwriteClient();
-  if (!client) {
-    return null;
-  }
-
-  return await getDocumentOrNull(
-    client.databases,
-    cfg.appwrite.cloudDatabaseId,
-    cfg.appwrite.labsCollectionId,
-    userId,
-  );
-}
-
 function getLabDocumentIdCandidatesSyncFallback(userId: string): string[] {
   const normalized = userId.trim();
   if (!normalized) return [];
@@ -142,16 +151,40 @@ function getLabDocumentIdCandidatesSyncFallback(userId: string): string[] {
   return [normalized];
 }
 
-async function getLabsDocumentWithId(userId: string): Promise<{ documentId: string; document: Record<string, unknown> } | null> {
-  const candidates = await resolveCloudUserIdCandidates(userId);
-  for (const candidate of candidates) {
-    const document = await getLabsDocumentOrNull(candidate);
-    if (document) {
-      return { documentId: candidate, document };
-    }
+function buildLabDocumentCandidates(
+  userId: string,
+  candidates: readonly string[],
+  discoveredAppwriteUserId?: string | null,
+): string[] {
+  return Array.from(new Set([
+    ...(discoveredAppwriteUserId ? [discoveredAppwriteUserId] : []),
+    ...candidates,
+    ...getLabDocumentIdCandidatesSyncFallback(userId),
+  ].map(value => value.trim()).filter(Boolean)));
+}
+
+async function getLabsDocumentWithId(
+  userId: string,
+  context: LabCloudContext = {},
+  discoveredAppwriteUserId?: string | null,
+): Promise<{ documentId: string; document: Record<string, unknown> } | null> {
+  const cfg = getAppConfig();
+  if (!cfg.appwrite) {
+    return null;
   }
 
-  return null;
+  const client = getAppwriteClient();
+  if (!client) {
+    return null;
+  }
+
+  const candidates = await resolveCloudUserIdCandidates(userId, context);
+  return await resolveDocumentByCandidates({
+    databases: client.databases,
+    databaseId: cfg.appwrite.cloudDatabaseId,
+    collectionId: cfg.appwrite.labsCollectionId,
+    candidateDocumentIds: buildLabDocumentCandidates(userId, candidates, discoveredAppwriteUserId),
+  });
 }
 
 async function discoverAppwriteUserIdByUsername(username?: string): Promise<string | null> {
@@ -289,16 +322,7 @@ async function loadLegacyLabStateByUserId(userId: string): Promise<LabCloudLoadR
       return null;
     }
 
-    const labLevels: Record<string, { startLevel: number; targetLevel: number }> = {};
-    for (const record of progressDocs) {
-      if (!record || typeof record.labName !== 'string' || record.labName.length === 0) {
-        continue;
-      }
-
-      const startLevel = Math.max(0, Math.floor(Number(record.currentLevel ?? record.rangeStart ?? 0) || 0));
-      const targetLevel = Math.max(startLevel, Math.floor(Number(record.rangeTarget ?? startLevel) || startLevel));
-      labLevels[record.labName] = { startLevel, targetLevel };
-    }
+    const labLevels = buildLabLevelRangesFromProgressRecords(progressDocs);
 
     return {
       settings: normalizeLocalLabSettings({
@@ -339,41 +363,30 @@ export async function loadUserLabSettingsCloud(userId: string, context: LabCloud
     const legacy = await loadLegacyLabStateWithFallbacks(userId, context);
     const discoveredAppwriteUserId = await resolveDiscoveredAppwriteUserId(context);
 
-    let resolvedDoc = await getLabsDocumentWithId(userId);
-    if (!resolvedDoc && discoveredAppwriteUserId) {
-      resolvedDoc = await getLabsDocumentWithId(discoveredAppwriteUserId);
-    }
+    const resolvedDoc = await getLabsDocumentWithId(userId, context, discoveredAppwriteUserId);
 
-    const doc = resolvedDoc?.document;
-    if (!doc || typeof doc.data !== 'string') {
+    const rawDoc = resolvedDoc?.document;
+    if (!rawDoc || typeof rawDoc.data !== 'string') {
       return legacy;
     }
+    const doc = labsDocumentSchema.parse(rawDoc);
 
-    const blob = JSON.parse(doc.data) as LabBlobState;
+    const blob = labBlobSchema.parse(JSON.parse(doc.data));
     const records = Array.isArray(blob.progress?.records) ? blob.progress?.records : [];
 
-    const labLevels: Record<string, { startLevel: number; targetLevel: number }> = {};
-    for (const record of records) {
-      if (!record || typeof record.labName !== 'string' || record.labName.length === 0) {
-        continue;
-      }
-
-      const startLevel = Math.max(0, Math.floor(Number(record.currentLevel ?? record.rangeStart ?? 0) || 0));
-      const targetLevel = Math.max(startLevel, Math.floor(Number(record.rangeTarget ?? startLevel) || startLevel));
-      labLevels[record.labName] = { startLevel, targetLevel };
-    }
+    const labLevels = buildLabLevelRangesFromProgressRecords(records);
 
     const labsSettings = blob.settings?.labs ?? {};
     const ui = toObjectRecord(blob.settings?.ui) ?? {};
 
-    const trackerLabs = normalizeLocalLabSettings({
+    const trackerLabs = userLabSettingsSchema.parse(normalizeLocalLabSettings({
       labSpeed: Number(labsSettings.labSpeed ?? 0),
       labRelic: Number(labsSettings.labRelic ?? 0),
       labDiscount: Number(labsSettings.labDiscount ?? 0),
       speedUp: Number(labsSettings.speedUp ?? 1),
       hideMaxedLabs: ui.toolsBotHideMaxedLabs !== false,
       labLevels,
-    });
+    }));
 
     return {
       settings: pickRicherLabSettings(trackerLabs, legacy?.settings ?? null) ?? DEFAULT_LAB_SETTINGS,
@@ -397,92 +410,83 @@ export async function saveUserLabSettingsCloud(userId: string, settings: UserLab
   }
 
   try {
+    const parsedSettings = normalizeLocalLabSettings(userLabSettingsSchema.parse(settings));
     const nowIso = new Date().toISOString();
     const candidates = await resolveCloudUserIdCandidates(userId, context);
-    const existingResolved = await getLabsDocumentWithId(userId);
-    const existing = existingResolved?.document;
-    let targetDocumentId = existingResolved?.documentId ?? candidates[0] ?? getLabDocumentIdCandidatesSyncFallback(userId)[0] ?? userId;
-    if (!existingResolved) {
-      const discoveredAppwriteUserId = await resolveDiscoveredAppwriteUserId(context);
-      if (discoveredAppwriteUserId) {
-        targetDocumentId = discoveredAppwriteUserId;
-      }
-    }
-    const existingBlob = typeof existing?.data === 'string'
-      ? (JSON.parse(existing.data) as LabBlobState)
-      : {};
+    const discoveredAppwriteUserId = await resolveDiscoveredAppwriteUserId(context);
+    const existingResolved = await getLabsDocumentWithId(userId, context, discoveredAppwriteUserId);
+    const targetDocumentId = existingResolved?.documentId
+      ?? discoveredAppwriteUserId
+      ?? candidates[0]
+      ?? getLabDocumentIdCandidatesSyncFallback(userId)[0]
+      ?? userId;
 
-    const normalized = normalizeLocalLabSettings(settings);
+    await mutateCloudJsonBlobDocument({
+      databases: client.databases,
+      databaseId: cfg.appwrite.cloudDatabaseId,
+      collectionId: cfg.appwrite.labsCollectionId,
+      candidateDocumentIds: buildLabDocumentCandidates(userId, candidates, discoveredAppwriteUserId),
+      fallbackDocumentId: targetDocumentId,
+      nowIso,
+      parseBlob: raw => {
+        if (typeof raw !== 'string') {
+          return {};
+        }
 
-    const recordsByName = new Map<string, LabBlobRecord>();
-    const existingRecords = Array.isArray(existingBlob.progress?.records) ? existingBlob.progress.records : [];
-    for (const record of existingRecords) {
-      if (!record || typeof record.labName !== 'string' || record.labName.length === 0) {
-        continue;
-      }
-      recordsByName.set(record.labName, { ...record });
-    }
-
-    for (const [labName, range] of Object.entries(normalized.labLevels)) {
-      const existingRecord = recordsByName.get(labName) ?? { labName };
-      recordsByName.set(labName, {
-        ...existingRecord,
-        labName,
-        currentLevel: Math.max(0, Math.floor(Number(range.startLevel) || 0)),
-        rangeStart: Math.max(0, Math.floor(Number(range.startLevel) || 0)),
-        rangeTarget: Math.max(0, Math.floor(Number(range.targetLevel) || 0)),
-      });
-    }
-
-    const nextLabs = {
-      ...(toObjectRecord(existingBlob.settings?.labs) ?? {}),
-      labSpeed: normalized.labSpeed,
-      labRelic: normalized.labRelic,
-      labDiscount: normalized.labDiscount,
-      speedUp: normalized.speedUp,
-    };
-
-    const nextUi = {
-      ...(toObjectRecord(existingBlob.settings?.ui) ?? {}),
-      toolsBotHideMaxedLabs: normalized.hideMaxedLabs,
-    };
-
-    const nextBlob: LabBlobState = {
-      ...existingBlob,
-      progress: {
-        ...(toObjectRecord(existingBlob.progress) ?? {}),
-        records: Array.from(recordsByName.values()),
+        return labBlobSchema.parse(JSON.parse(raw));
       },
-      settings: {
-        ...(toObjectRecord(existingBlob.settings) ?? {}),
-        labs: nextLabs,
-        ui: nextUi,
+      mutate: existingBlobInput => {
+        const existingBlob = labBlobSchema.parse(existingBlobInput) as LabBlobState;
+
+        const recordsByName = new Map<string, LabBlobRecord>();
+        const existingRecords = Array.isArray(existingBlob.progress?.records) ? existingBlob.progress.records : [];
+        for (const record of existingRecords) {
+          if (!record || typeof record.labName !== 'string' || record.labName.length === 0) {
+            continue;
+          }
+          recordsByName.set(record.labName, { ...record });
+        }
+
+        for (const [labName, range] of Object.entries(parsedSettings.labLevels)) {
+          const existingRecord = recordsByName.get(labName) ?? { labName };
+          recordsByName.set(labName, {
+            ...existingRecord,
+            labName,
+            currentLevel: Math.max(0, Math.floor(Number(range.startLevel) || 0)),
+            rangeStart: Math.max(0, Math.floor(Number(range.startLevel) || 0)),
+            rangeTarget: Math.max(0, Math.floor(Number(range.targetLevel) || 0)),
+          });
+        }
+
+        const nextLabs = {
+          ...(toObjectRecord(existingBlob.settings?.labs) ?? {}),
+          labSpeed: parsedSettings.labSpeed,
+          labRelic: parsedSettings.labRelic,
+          labDiscount: parsedSettings.labDiscount,
+          speedUp: parsedSettings.speedUp,
+        };
+
+        const nextUi = {
+          ...(toObjectRecord(existingBlob.settings?.ui) ?? {}),
+          toolsBotHideMaxedLabs: parsedSettings.hideMaxedLabs,
+        };
+
+        const nextBlob: LabBlobState = {
+          ...existingBlob,
+          progress: {
+            ...(toObjectRecord(existingBlob.progress) ?? {}),
+            records: Array.from(recordsByName.values()),
+          },
+          settings: {
+            ...(toObjectRecord(existingBlob.settings) ?? {}),
+            labs: nextLabs,
+            ui: nextUi,
+          },
+        };
+
+        return nextBlob;
       },
-    };
-
-    const payload = {
-      version: Number.isFinite(Number(existing?.version)) ? Number(existing?.version) : 1,
-      data: JSON.stringify(nextBlob),
-      createdAt: typeof existing?.createdAt === 'string' ? existing.createdAt : nowIso,
-      updatedAt: nowIso,
-    };
-
-    if (existing) {
-      await client.databases.updateDocument(
-        cfg.appwrite.cloudDatabaseId,
-        cfg.appwrite.labsCollectionId,
-        targetDocumentId,
-        payload,
-      );
-      return true;
-    }
-
-    await client.databases.createDocument(
-      cfg.appwrite.cloudDatabaseId,
-      cfg.appwrite.labsCollectionId,
-      targetDocumentId,
-      payload,
-    );
+    });
     return true;
   } catch (error) {
     logger.warn('Failed saving lab settings cloud state', error);

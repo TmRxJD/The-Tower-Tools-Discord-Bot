@@ -2,14 +2,17 @@ import { getAppConfig } from '../config';
 import { logger } from '../core/logger';
 import { getAppwriteClient } from './appwrite-client';
 import { resolveCloudUserIdCandidates } from './cloud-user-resolution';
+import { z } from 'zod';
 import {
-  createCloudJsonBlobPayload,
-  findFirstResolvedCloudDocument,
-  isCloudNotFoundError,
+  checklistStateSchema,
+  normalizeChecklistState,
+  normalizeReminderCompositeState,
   parseCloudJsonBlob,
   parseIsoTimestampToMillis,
+  reminderCompositeStateSchema,
   toObjectRecord,
 } from '@tmrxjd/platform/tools';
+import { mutateCloudJsonBlobDocument, resolveDocumentByCandidates } from '@tmrxjd/platform/node';
 
 export type CloudReminderState = {
   toggles: Record<string, boolean>;
@@ -23,7 +26,20 @@ export type CloudChecklistState = {
   updatedAt: number | null;
 };
 
-async function getCollectionDocumentOrNull(userId: string, collectionId: string): Promise<Record<string, unknown> | null> {
+const cloudBlobDocumentSchema = z.object({
+  data: z.string(),
+  updatedAt: z.string().optional(),
+  $updatedAt: z.string().optional(),
+}).passthrough();
+
+const reminderStateSchema = reminderCompositeStateSchema.extend({
+  updatedAt: z.number().nullable(),
+});
+
+async function getCollectionDocumentWithId(
+  userId: string,
+  collectionId: string,
+): Promise<{ documentId: string; document: Record<string, unknown> } | null> {
   const cfg = getAppConfig();
   if (!cfg.appwrite) {
     return null;
@@ -34,27 +50,13 @@ async function getCollectionDocumentOrNull(userId: string, collectionId: string)
     return null;
   }
 
-  try {
-    return await client.databases.getDocument(
-      cfg.appwrite.cloudDatabaseId,
-      collectionId,
-      userId,
-    ) as unknown as Record<string, unknown>;
-  } catch (error) {
-    if (isCloudNotFoundError(error)) {
-      return null;
-    }
-
-    throw error;
-  }
-}
-
-async function getCollectionDocumentWithId(
-  userId: string,
-  collectionId: string,
-): Promise<{ documentId: string; document: Record<string, unknown> } | null> {
   const candidates = await resolveCloudUserIdCandidates(userId);
-  return findFirstResolvedCloudDocument(candidates, candidate => getCollectionDocumentOrNull(candidate, collectionId));
+  return await resolveDocumentByCandidates({
+    databases: client.databases,
+    databaseId: cfg.appwrite.cloudDatabaseId,
+    collectionId,
+    candidateDocumentIds: candidates,
+  });
 }
 
 async function saveCollectionBlob(
@@ -74,31 +76,15 @@ async function saveCollectionBlob(
 
   const nowIso = new Date().toISOString();
   const candidates = await resolveCloudUserIdCandidates(userId);
-  const existingResolved = await getCollectionDocumentWithId(userId, collectionId);
-  const existing = existingResolved?.document;
-  const targetDocumentId = existingResolved?.documentId ?? candidates[0] ?? userId;
-  const existingBlob = parseCloudJsonBlob(existing?.data) ?? {};
-
-  const nextBlob = mutator(existingBlob);
-
-  const payload = createCloudJsonBlobPayload(existing ?? null, nextBlob, nowIso);
-
-  if (existing) {
-    await client.databases.updateDocument(
-      cfg.appwrite.cloudDatabaseId,
-      collectionId,
-      targetDocumentId,
-      payload,
-    );
-    return;
-  }
-
-  await client.databases.createDocument(
-    cfg.appwrite.cloudDatabaseId,
+  await mutateCloudJsonBlobDocument({
+    databases: client.databases,
+    databaseId: cfg.appwrite.cloudDatabaseId,
     collectionId,
-    targetDocumentId,
-    payload,
-  );
+    candidateDocumentIds: candidates,
+    fallbackDocumentId: userId,
+    nowIso,
+    mutate: existingBlob => mutator(existingBlob),
+  });
 }
 
 export async function loadUserReminderCloudState(userId: string): Promise<CloudReminderState | null> {
@@ -109,10 +95,11 @@ export async function loadUserReminderCloudState(userId: string): Promise<CloudR
     }
 
     const resolved = await getCollectionDocumentWithId(userId, cfg.appwrite.remindCollectionId);
-    const doc = resolved?.document;
-    if (!doc || typeof doc.data !== 'string') {
+    const rawDoc = resolved?.document;
+    if (!rawDoc || typeof rawDoc.data !== 'string') {
       return null;
     }
+    const doc = cloudBlobDocumentSchema.parse(rawDoc);
 
     const blob = parseCloudJsonBlob(doc.data);
     if (!blob) {
@@ -134,11 +121,13 @@ export async function loadUserReminderCloudState(userId: string): Promise<CloudR
       toggles[key] = Boolean(value);
     }
 
-    return {
-      toggles,
-      paused: Boolean(reminderObj.paused),
+    return reminderStateSchema.parse({
+      ...normalizeReminderCompositeState({
+        toggles,
+        paused: Boolean(reminderObj.paused),
+      }),
       updatedAt: parseIsoTimestampToMillis(doc.updatedAt ?? doc.$updatedAt),
-    };
+    });
   } catch (error) {
     logger.warn('Failed loading reminder cloud state', error);
     return null;
@@ -152,6 +141,8 @@ export async function saveUserReminderCloudState(userId: string, state: CloudRem
       return false;
     }
 
+    const parsedState = reminderStateSchema.parse(state);
+
     await saveCollectionBlob(userId, cfg.appwrite.remindCollectionId, existingBlob => {
       const settings = toObjectRecord(existingBlob.settings) ?? {};
       return {
@@ -159,8 +150,8 @@ export async function saveUserReminderCloudState(userId: string, state: CloudRem
         settings: {
           ...settings,
           reminders: {
-            toggles: state.toggles,
-            paused: state.paused,
+            toggles: parsedState.toggles,
+            paused: parsedState.paused,
           },
         },
       };
@@ -180,10 +171,11 @@ export async function loadUserChecklistCloudState(userId: string): Promise<Cloud
     }
 
     const resolved = await getCollectionDocumentWithId(userId, cfg.appwrite.checklistCollectionId);
-    const doc = resolved?.document;
-    if (!doc || typeof doc.data !== 'string') {
+    const rawDoc = resolved?.document;
+    if (!rawDoc || typeof rawDoc.data !== 'string') {
       return null;
     }
+    const doc = cloudBlobDocumentSchema.parse(rawDoc);
 
     const blob = parseCloudJsonBlob(doc.data);
     if (!blob) {
@@ -209,7 +201,7 @@ export async function loadUserChecklistCloudState(userId: string): Promise<Cloud
       ? Number(checklistObj.updatedAt)
       : null;
 
-    return { labels, tasks, updatedAt };
+    return normalizeChecklistState({ labels, tasks, updatedAt });
   } catch (error) {
     logger.warn('Failed loading checklist cloud state', error);
     return null;
@@ -223,6 +215,8 @@ export async function saveUserChecklistCloudState(userId: string, state: CloudCh
       return false;
     }
 
+    const parsedState = checklistStateSchema.parse(state);
+
     await saveCollectionBlob(userId, cfg.appwrite.checklistCollectionId, existingBlob => {
       const settings = toObjectRecord(existingBlob.settings) ?? {};
       return {
@@ -230,9 +224,9 @@ export async function saveUserChecklistCloudState(userId: string, state: CloudCh
         settings: {
           ...settings,
           checklist: {
-            labels: state.labels,
-            tasks: state.tasks,
-            updatedAt: state.updatedAt,
+            labels: parsedState.labels,
+            tasks: parsedState.tasks,
+            updatedAt: parsedState.updatedAt,
           },
         },
       };

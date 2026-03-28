@@ -1,4 +1,5 @@
 import { getAppConfig } from '../config';
+import { isResponsesEndpoint } from '@tmrxjd/platform/tools';
 
 export type TrackerAiCloudAnswerOptions = {
   prompt: string;
@@ -28,16 +29,20 @@ function getCloudApiKey(): string {
   return String(getAppConfig().ai.cloudApiKey || '').trim();
 }
 
-function getPrimaryModelId(): string {
-  return String(getAppConfig().ai.cloudReasoningModel || '').trim();
+function getPrimaryModelId(deepReasoning?: boolean): string {
+  const aiConfig = getAppConfig().ai;
+  if (deepReasoning === true) {
+    const deepModelId = String(aiConfig.cloudDeepReasoningModel || '').trim();
+    if (deepModelId) {
+      return deepModelId;
+    }
+  }
+
+  return String(aiConfig.cloudReasoningModel || '').trim();
 }
 
 function getFallbackModelId(): string {
   return String(getAppConfig().ai.cloudFallbackReasoningModel || '').trim();
-}
-
-function isResponsesEndpoint(endpoint: string): boolean {
-  return /\/responses\/?$/i.test(String(endpoint || '').trim());
 }
 
 function stripReasoningTrace(raw: unknown): string {
@@ -148,7 +153,7 @@ async function executeCloudRequest(options: {
 export async function runTrackerAiCloudAnswer(options: TrackerAiCloudAnswerOptions): Promise<TrackerAiCloudAnswerResult> {
   const endpoint = getCloudEndpoint();
   const apiKey = getCloudApiKey();
-  const primaryModelId = getPrimaryModelId();
+  const primaryModelId = getPrimaryModelId(options.deepReasoning);
   const fallbackModelId = getFallbackModelId();
 
   if (!endpoint || !apiKey || !primaryModelId) {

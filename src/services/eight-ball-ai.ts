@@ -1,6 +1,13 @@
 import { getAppConfig } from '../config';
 import { getBotConfig } from '../config/bot-config';
-import { toNonEmptyText } from '@tmrxjd/platform/tools';
+import {
+  isCloudRateLimitResponse,
+  isResponsesEndpoint,
+  normalizeText,
+  resolveAttemptModels,
+  resolveChatCompletionsEndpoint,
+  toNonEmptyText,
+} from '@tmrxjd/platform/tools';
 
 interface OpenAiChatCompletionResponse {
   choices?: Array<{
@@ -25,10 +32,6 @@ interface OpenAiErrorResponse {
   };
 }
 
-function normalizeText(value: unknown, maxLength = 20_000): string {
-  return String(value || '').slice(0, maxLength).trim();
-}
-
 function stripCloudReasoningTrace(raw: unknown): string {
   const normalized = normalizeText(raw);
   if (!normalized) {
@@ -49,35 +52,6 @@ function stripCloudReasoningTrace(raw: unknown): string {
   }
 
   return withoutClosedTags;
-}
-
-function resolveChatCompletionsEndpoint(configured: string | undefined, fallback: string): string {
-  const trimmed = String(configured || '').trim();
-  if (!trimmed) {
-    return fallback;
-  }
-
-  if (/\/responses\/?$/i.test(trimmed)) {
-    return trimmed.replace(/\/$/, '');
-  }
-
-  if (/\/chat\/completions\/?$/i.test(trimmed)) {
-    return trimmed.replace(/\/$/, '');
-  }
-
-  return `${trimmed.replace(/\/$/, '')}/chat/completions`;
-}
-
-function isResponsesEndpoint(endpoint: string): boolean {
-  return /\/responses$/i.test(String(endpoint || '').trim());
-}
-
-function isCloudRateLimitResponse(status: number, message: string): boolean {
-  if (status === 429) {
-    return true;
-  }
-
-  return /rate[_ -]?limit|too many requests|quota/i.test(String(message || ''));
 }
 
 function extractCloudReplyContent(payload: OpenAiChatCompletionResponse): string {
@@ -112,11 +86,6 @@ function extractCloudReplyContent(payload: OpenAiChatCompletionResponse): string
   }
 
   return '';
-}
-
-function resolveAttemptModels(primaryModel: string, fallbackModel?: string): string[] {
-  const models = [primaryModel, String(fallbackModel || '').trim()].filter(Boolean);
-  return [...new Set(models)];
 }
 
 function createProviderSpecificRequestFields(model: string): Record<string, unknown> {

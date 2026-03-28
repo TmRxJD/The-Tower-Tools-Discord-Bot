@@ -1,6 +1,13 @@
 import { getToolsBotDb, reminderPairId } from './idb';
 import { logger } from '../core/logger';
-import { buildSyncedStateReconcileResult, saveSyncedToolState } from '@tmrxjd/platform/tools';
+import {
+  buildSyncedStateReconcileResult,
+  normalizeChecklistState,
+  normalizeReminderCompositeState,
+  saveSyncedToolState,
+  type ChecklistState,
+  type ReminderCompositeState,
+} from '@tmrxjd/platform/tools';
 import {
   type CloudChecklistState,
   type CloudReminderState,
@@ -10,20 +17,10 @@ import {
   saveUserReminderCloudState,
 } from './user-reminder-cloud';
 import { syncCloudOutboxState } from './cloud-sync-outbox';
+import { getEffectiveUserSharedSettings } from './user-shared-settings-db';
 
 const CHECKLIST_SCOPE = 'checklist-state';
 const REMINDER_SCOPE = 'reminder-state';
-
-export interface ChecklistState {
-  labels: Array<string | null>;
-  tasks: boolean[];
-  updatedAt: number | null;
-}
-
-export type ReminderCompositeState = {
-  paused: boolean;
-  toggles: Record<string, boolean>;
-};
 
 type Direction = 'cloud-newer' | 'local-newer' | 'unknown';
 
@@ -51,17 +48,13 @@ export type ChecklistReconcileResult = {
   applyLocalToCloud: () => Promise<void>;
 };
 
-function normalizeChecklistState(state: CloudChecklistState | ChecklistState | null): ChecklistState {
-  return {
-    labels: Array.isArray(state?.labels) ? [...state.labels] : [],
-    tasks: Array.isArray(state?.tasks) ? [...state.tasks] : [],
-    updatedAt: Number.isFinite(Number(state?.updatedAt)) ? Number(state?.updatedAt) : null,
-  };
-}
-
 async function isCloudSyncEnabledForUser(userId: string): Promise<boolean> {
-  void userId;
-  return true;
+  try {
+    return (await getEffectiveUserSharedSettings(userId)).cloudSyncEnabled;
+  } catch (error) {
+    logger.warn('Failed to resolve shared settings for reminder sync gating', error);
+    return false;
+  }
 }
 
 async function loadLocalChecklist(userId: string): Promise<ChecklistState | null> {
@@ -242,10 +235,10 @@ async function loadLocalReminderState(userId: string): Promise<{ state: Reminder
     : (latestToggleUpdatedAt === null ? settingsUpdatedAt : Math.max(settingsUpdatedAt, latestToggleUpdatedAt));
 
   return {
-    state: {
+    state: normalizeReminderCompositeState({
       paused: Boolean(settingsRow?.paused),
       toggles,
-    },
+    }),
     updatedAt: localUpdatedAt,
   };
 }
@@ -316,7 +309,7 @@ export async function reconcileUserReminderState(userId: string): Promise<Remind
       updatedAt: cloud?.updatedAt ?? null,
     },
     autoCloudEnabled: cloudSyncEnabled,
-    normalize: state => state ?? { paused: false, toggles: {} },
+    normalize: state => normalizeReminderCompositeState(state),
     saveLocal: async state => {
       await saveUserReminders(userId, state.toggles)
       await setPauseAll(userId, state.paused)

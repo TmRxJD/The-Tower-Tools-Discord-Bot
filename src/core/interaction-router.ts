@@ -32,17 +32,23 @@ export function registerInteractionRouter(client: ToolsBotClient) {
         return;
       }
 
-      if (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) {
+      if (
+        interaction.isButton()
+        || interaction.isStringSelectMenu()
+        || interaction.isUserSelectMenu()
+        || interaction.isRoleSelectMenu()
+        || interaction.isMentionableSelectMenu()
+        || interaction.isChannelSelectMenu()
+        || interaction.isModalSubmit()
+      ) {
         if (client.scopedInteractionSessions.owns(interaction)) {
           return;
         }
 
-        const handler = client.components.find(interaction);
-        if (!handler) {
-          logger.warn(`No global component handler registered for customId: ${interaction.customId}`);
+        const handled = await client.components.dispatch(interaction);
+        if (!handled) {
           return;
         }
-        await handler(interaction);
       }
     } catch (error) {
       logger.error('Interaction handling error', error);

@@ -32,6 +32,7 @@ import { renderTableChartPng } from '../services/table-chart-render';
 import { showModalAndAwaitSubmit } from '../services/modal-submit';
 import { resolveUserStorageState } from '../services/user-storage-resolution';
 import { runCloudReconcileUi } from '../services/cloud-reconcile-ui';
+import { ToolsBotClient } from '../core/tools-bot-client';
 
 interface LabChartRow {
   level: number;
@@ -404,6 +405,29 @@ export const labCommand: CommandModule = {
     }
 
     const collector = reply.createMessageComponentCollector({ time: labConfig.behavior.collectorTimeoutMs });
+    const client = interaction.client as ToolsBotClient;
+    const scopedSessionId = `lab:${interaction.id}`;
+    client.scopedInteractionSessions.register({
+      sessionId: scopedSessionId,
+      ownerUserId: interaction.user.id,
+      messageId: reply.id,
+      componentCustomIds: [
+        LAB_SHARE_BUTTON_ID,
+        ids.close,
+        ids.toggleHideMaxed,
+        ids.settings,
+        ids.range,
+        ids.speedup,
+        ids.category,
+        ids.lab,
+        ids.uwType,
+      ],
+      modalCustomIds: [
+        ids.settingsModal,
+        ids.rangeModal,
+      ],
+      ttlMs: labConfig.behavior.collectorTimeoutMs,
+    });
 
     const refreshReply = async (componentInteraction?: MessageComponentInteraction) => {
       if (componentInteraction && !componentInteraction.deferred && !componentInteraction.replied) {
@@ -418,6 +442,7 @@ export const labCommand: CommandModule = {
         files: nextAttachment ? [nextAttachment] : [],
       };
 
+            client.scopedInteractionSessions.unregister(scopedSessionId);
       await interaction.editReply(payload);
     };
 

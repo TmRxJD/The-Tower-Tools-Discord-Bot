@@ -13,6 +13,7 @@ import {
 } from './user-reminder-db';
 import type { ToolsBotClient } from '../core/tools-bot-client';
 import { getBotConfig } from '../config/bot-config';
+import { createReminderStopCustomId, parseReminderStopCustomId } from './reminder-interaction-ids';
 
 const remindConfig = getBotConfig().commands.remind;
 const remindUi = remindConfig.ui;
@@ -65,7 +66,7 @@ export async function sendReminderDM(
       .setFooter({ text: remindUi.dmFooter });
 
     const stopButton = new ButtonBuilder()
-      .setCustomId(`${remindIds.stopPrefix}${userId}_${reminderKey}`)
+      .setCustomId(createReminderStopCustomId(userId, reminderKey))
       .setLabel(remindUi.dmStopButtonLabel)
       .setStyle(ButtonStyle.Danger);
 
@@ -78,18 +79,12 @@ export async function sendReminderDM(
 }
 
 export async function handleStopReminderInteraction(interaction: MessageComponentInteraction): Promise<void> {
-  if (!interaction.customId.startsWith(remindIds.stopPrefix)) {
+  const parsed = parseReminderStopCustomId(interaction.customId);
+  if (!parsed) {
     return;
   }
 
-  const encoded = interaction.customId.slice(remindIds.stopPrefix.length);
-  const separatorIndex = encoded.indexOf('_');
-  if (separatorIndex <= 0 || separatorIndex >= encoded.length - 1) {
-    return;
-  }
-
-  const userId = encoded.slice(0, separatorIndex);
-  const reminderKey = encoded.slice(separatorIndex + 1);
+  const { userId, reminderKey } = parsed;
   if (interaction.user.id !== userId) {
     await interaction.reply({ content: remindUi.dmStopUnauthorized, ephemeral: true });
     return;

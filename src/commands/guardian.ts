@@ -14,12 +14,15 @@ import {
 import {
   formatGroupedToolNumber,
   formatOptionalGroupedToolNumber,
+  GUARDIAN_STATE_SCHEMA_VERSION,
   getGuardianCostValuesCompat,
   type GuardianDefinitionCompat,
   getGuardianMaxLevelCompat,
   getGuardianStatNamesCompat,
   getGuardianStatValuesCompat,
   getDefaultLevelRange,
+  type GuardianSharedState,
+  normalizeGuardianSharedState,
   type ConfigurableCell,
   type ConfigurableTableDocument,
   stableEquals,
@@ -35,73 +38,15 @@ import { resolveUserStorageState } from '../services/user-storage-resolution'
 import { renderConfigurableTablePng, renderTableChartPng } from '../services/table-chart-render'
 import { showModalAndAwaitSubmit } from '../services/modal-submit'
 import { runCloudReconcileUi } from '../services/cloud-reconcile-ui'
+import type { ToolsBotClient } from '../core/tools-bot-client'
 
 const guardianConfig = getBotConfig().commands.guardian
 const GUARDIAN_SHARE_BUTTON_ID = 'guardian_share'
-const GUARDIAN_STATE_SCHEMA_VERSION = 2
 const guardianDefinitions = buildGuardianDefinitions() as GuardianDefinitionCompat[]
 const guardianByKey = new Map(guardianDefinitions.map(def => [def.key.toLowerCase(), def]))
 
-type GuardianSharedState = {
-  schemaVersion: number
-  type: string
-  startLevel: number
-  targetLevel: number
-  selectedStats: string[]
-}
-
-function getDefaultGuardianType(): string {
-  return guardianDefinitions[0]?.key ?? 'attack'
-}
-
 function getDefaultGuardianRange(maxLevel: number): { startLevel: number; targetLevel: number } {
   return getDefaultLevelRange(0, Math.max(0, maxLevel))
-}
-
-function normalizeGuardianSharedState(input: Record<string, unknown> | null): GuardianSharedState {
-  const fallbackType = getDefaultGuardianType()
-  const requestedType = typeof input?.type === 'string' ? input.type.toLowerCase() : fallbackType
-  const definition = guardianByKey.get(requestedType) ?? guardianByKey.get(fallbackType)
-  const maxLevel = definition ? getGuardianMaxLevelCompat(definition) : 0
-  const rawSchemaVersion = Number(input?.schemaVersion)
-  const isLegacyIndexedState = !Number.isFinite(rawSchemaVersion) || rawSchemaVersion < GUARDIAN_STATE_SCHEMA_VERSION
-  const rawLegacyLevel = Number(input?.level)
-  const rawStartLevel = Number(input?.startLevel)
-  const rawTargetLevel = Number(input?.targetLevel)
-  const hasLegacyLevel = Number.isFinite(rawLegacyLevel)
-  const hasStartLevel = Number.isFinite(rawStartLevel)
-  const hasTargetLevel = Number.isFinite(rawTargetLevel)
-  const defaultRange = getDefaultGuardianRange(maxLevel)
-  const normalizeIncomingLevel = (value: number, fallbackLevel: number): number => {
-    if (!Number.isFinite(value)) return fallbackLevel
-    const level = Math.floor(value)
-    return isLegacyIndexedState ? level - 1 : level
-  }
-  const legacyLevel = normalizeIncomingLevel(rawLegacyLevel, defaultRange.startLevel)
-  const startLevel = hasStartLevel
-    ? normalizeIncomingLevel(rawStartLevel, defaultRange.startLevel)
-    : hasLegacyLevel
-      ? legacyLevel
-      : defaultRange.startLevel
-  const targetLevel = hasTargetLevel
-    ? normalizeIncomingLevel(rawTargetLevel, defaultRange.targetLevel)
-    : hasLegacyLevel
-      ? legacyLevel
-      : defaultRange.targetLevel
-  const selectedStats = Array.isArray(input?.selectedStats)
-    ? input.selectedStats.filter((entry): entry is string => typeof entry === 'string')
-    : []
-
-  const clampedStart = Math.max(0, Math.min(maxLevel, startLevel))
-  const clampedTarget = Math.max(clampedStart, Math.min(maxLevel, targetLevel))
-
-  return {
-    schemaVersion: GUARDIAN_STATE_SCHEMA_VERSION,
-    type: definition?.key ?? fallbackType,
-    startLevel: clampedStart,
-    targetLevel: clampedTarget,
-    selectedStats,
-  }
 }
 
 function calculateRangeCost(costs: Array<number | null> | undefined, startLevel: number, targetLevel: number): number {
@@ -549,6 +494,15 @@ export const guardianCommand = createChatInputCommand(data, async interaction =>
     time: guardianConfig.behavior.collectorTimeoutMs,
     filter: i => i.user.id === interaction.user.id,
   })
+  const client = interaction.client as ToolsBotClient
+  const scopedSessionId = `guardian:${interaction.id}`
+  client.scopedInteractionSessions.register({
+    sessionId: scopedSessionId,
+    ownerUserId: interaction.user.id,
+    messageId: reply.id,
+    modalCustomIds: [guardianConfig.ids.levelModal],
+    ttlMs: guardianConfig.behavior.collectorTimeoutMs,
+  })
 
   collector.on('collect', async componentInteraction => {
     if (componentInteraction.isButton() && componentInteraction.customId === GUARDIAN_SHARE_BUTTON_ID) {
@@ -691,6 +645,7 @@ export const guardianCommand = createChatInputCommand(data, async interaction =>
   })
 
   collector.on('end', async () => {
+    client.scopedInteractionSessions.unregister(scopedSessionId)
     const finalRender = await createRender()
     await interaction.editReply({
       embeds: [finalRender.embed],

@@ -10,10 +10,13 @@ import {
   TextInputStyle,
 } from 'discord.js';
 import type { CommandModule } from '../core/command-types';
+import type { ToolsBotClient } from '../core/tools-bot-client';
 import { getUserChecklist, reconcileUserChecklistState, saveUserChecklist } from '../services/user-reminder-db';
 import { getBotConfig } from '../config/bot-config';
+import { createChecklistModalBaseCustomId, createChecklistModalPrefix, createChecklistTaskCustomId, parseChecklistTaskCustomId } from './checklist-interaction-ids';
 import { resolveUserStorageState } from '../services/user-storage-resolution';
 import { runCloudReconcileUi } from '../services/cloud-reconcile-ui';
+import { showModalAndAwaitSubmit } from '../services/modal-submit';
 import { hasMeaningfulChecklistState, normalizeChecklistLabels } from '@tmrxjd/platform/tools';
 
 const checklistConfig = getBotConfig().commands.checklist;
@@ -117,7 +120,7 @@ export const checklistCommand: CommandModule = {
           const label = `${checked ? checklistUi.completeEmoji : checklistUi.incompleteEmoji} ${labels[slotIndex] ?? checklistUi.unassignedLabel}`;
           row.addComponents(
             new ButtonBuilder()
-              .setCustomId(`${checklistIds.checkPrefix}${slotIndex}`)
+              .setCustomId(createChecklistTaskCustomId(slotIndex))
               .setLabel(label.slice(0, 80))
               .setStyle(checked ? ButtonStyle.Success : ButtonStyle.Secondary)
           );
@@ -178,6 +181,15 @@ export const checklistCommand: CommandModule = {
     }
 
     const collector = response.createMessageComponentCollector({ time: checklistBehavior.collectorTimeoutMs });
+    const client = interaction.client as ToolsBotClient;
+    const scopedSessionId = `checklist:${interaction.id}`;
+    client.scopedInteractionSessions.register({
+      sessionId: scopedSessionId,
+      ownerUserId: interaction.user.id,
+      messageId: response.id,
+      modalCustomIds: [createChecklistModalPrefix(MODE_EDIT), createChecklistModalPrefix(MODE_ADD)],
+      ttlMs: checklistBehavior.collectorTimeoutMs,
+    });
     const editState: { selectedMode: typeof MODE_EDIT | typeof MODE_ADD | typeof MODE_REMOVE; selectedSlot: number | null } = {
       selectedMode: MODE_EDIT,
       selectedSlot: null,
@@ -350,7 +362,7 @@ export const checklistCommand: CommandModule = {
         }
 
         const modal = new ModalBuilder()
-          .setCustomId(`${editState.selectedMode}${checklistIds.modalSuffix}${slot}`)
+          .setCustomId(createChecklistModalBaseCustomId(editState.selectedMode, slot))
           .setTitle(`${editState.selectedMode === MODE_ADD ? checklistUi.modalTitleAdd : checklistUi.modalTitleEdit} ${checklistUi.modalTitleSlotTemplate.replace('{index}', String(slot + 1))}`)
           .addComponents(
             new ActionRowBuilder<TextInputBuilder>().addComponents(
@@ -364,35 +376,33 @@ export const checklistCommand: CommandModule = {
             )
           );
 
-        await componentInteraction.showModal(modal);
+        const submitted = await showModalAndAwaitSubmit({
+          componentInteraction,
+          modal,
+          baseCustomId: createChecklistModalBaseCustomId(editState.selectedMode, slot),
+          userId: componentInteraction.user.id,
+          timeoutMs: checklistBehavior.modalSubmitTimeoutMs,
+        });
 
-        try {
-          const submitted = await componentInteraction.awaitModalSubmit({
-            filter: modalInteraction => (
-              modalInteraction.customId === `${editState.selectedMode}${checklistIds.modalSuffix}${slot}`
-              && modalInteraction.user.id === componentInteraction.user.id
-            ),
-            time: checklistBehavior.modalSubmitTimeoutMs,
-          });
-
-          const nextLabel = submitted.fields.getTextInputValue(checklistIds.modalInput).slice(0, 80);
-          labels[slot] = nextLabel;
-          await saveUserChecklist(storageUserId, labels, tasks);
-          await submitted.deferUpdate();
-          await interaction.editReply({
-            embeds: [buildEditEmbed()],
-            components: [buildModeSelectRow(), buildSlotSelectRow(), buildActionRow()],
-          });
-        } catch {
+        if (!submitted) {
           return;
         }
+
+        const nextLabel = submitted.fields.getTextInputValue(checklistIds.modalInput).slice(0, 80);
+        labels[slot] = nextLabel;
+        await saveUserChecklist(storageUserId, labels, tasks);
+        await submitted.deferUpdate();
+        await interaction.editReply({
+          embeds: [buildEditEmbed()],
+          components: [buildModeSelectRow(), buildSlotSelectRow(), buildActionRow()],
+        });
 
         return;
       }
 
-      if (id.startsWith(checklistIds.checkPrefix)) {
-        const idx = Number(id.slice(checklistIds.checkPrefix.length));
-        if (!Number.isNaN(idx) && idx >= 0 && idx < tasks.length && labels[idx]) {
+      const idx = parseChecklistTaskCustomId(id);
+      if (idx !== null) {
+        if (idx >= 0 && idx < tasks.length && labels[idx]) {
           tasks[idx] = !tasks[idx];
           await saveUserChecklist(storageUserId, labels, tasks);
           await componentInteraction.update({
@@ -407,6 +417,7 @@ export const checklistCommand: CommandModule = {
     });
 
     collector.on('end', async (_collected, reason) => {
+      client.scopedInteractionSessions.unregister(scopedSessionId);
       const disabledRows = buildTaskRows().map(row => {
         row.components.forEach(component => component.setDisabled(true));
         return row;

@@ -36,6 +36,7 @@ import { getUserCommandSharedState, reconcileUserCommandSharedState, saveUserCom
 import { resolveUserStorageState } from '../services/user-storage-resolution';
 import { runCloudReconcileUi } from '../services/cloud-reconcile-ui';
 import { showModalAndAwaitSubmit } from '../services/modal-submit';
+import type { ToolsBotClient } from '../core/tools-bot-client';
 
 const moduleConfig = getBotConfig().commands.module;
 const MODULE_SHARE_BUTTON_ID = 'module_share';
@@ -448,6 +449,15 @@ export const moduleCommand: CommandModule = {
       time: moduleConfig.behavior.collectorTimeoutMs,
       filter: i => i.user.id === interaction.user.id,
     });
+    const client = interaction.client as ToolsBotClient;
+    const scopedSessionId = `module:${interaction.id}`;
+    client.scopedInteractionSessions.register({
+      sessionId: scopedSessionId,
+      ownerUserId: interaction.user.id,
+      messageId: reply.id,
+      modalCustomIds: [moduleConfig.ids.primaryModal, moduleConfig.ids.assistModal],
+      ttlMs: moduleConfig.behavior.collectorTimeoutMs,
+    });
 
     collector.on('collect', async componentInteraction => {
       if (componentInteraction.isButton() && componentInteraction.customId === MODULE_SHARE_BUTTON_ID) {
@@ -689,6 +699,7 @@ export const moduleCommand: CommandModule = {
     });
 
     collector.on('end', async () => {
+      client.scopedInteractionSessions.unregister(scopedSessionId);
       await interaction.editReply({
         content: moduleConfig.ui.sessionTimedOut,
         embeds: [],

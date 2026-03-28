@@ -5,18 +5,19 @@ import { getToolsBotDb } from './idb';
 import { resolveCloudUserIdCandidates } from './cloud-user-resolution';
 import {
   buildSyncedStateReconcileResult,
-  createCloudJsonBlobPayload,
-  findFirstResolvedCloudDocument,
-  isCloudNotFoundError,
+  normalizeSharedCommandState,
   parseJsonWithSchema,
   parseIsoTimestampToMillis,
   saveSyncedToolState,
   sharedCommandStateBlobSchema,
+  type SharedCommandStateKey,
   toObjectRecord,
 } from '@tmrxjd/platform/tools';
+import { mutateCloudJsonBlobDocument, resolveDocumentByCandidates } from '@tmrxjd/platform/node';
 import { syncCloudOutboxState } from './cloud-sync-outbox';
+import { getEffectiveUserSharedSettings } from './user-shared-settings-db';
 
-export type SharedCommandStateKey = 'bots' | 'module' | 'workshop' | 'stone' | 'chart' | 'thorns' | 'guardian';
+export type { SharedCommandStateKey } from '@tmrxjd/platform/tools';
 
 type CollectionRoute = {
   primary: string;
@@ -29,7 +30,7 @@ type SharedCommandStateBlob = {
 
 export type CloudStateDirection = 'cloud-newer' | 'local-newer' | 'unknown';
 
-export type SharedCommandStateReconcileResult<T extends Record<string, unknown>> = {
+export type SharedCommandStateReconcileResult<T extends object> = {
   autoCloudEnabled: boolean;
   hasDifference: boolean;
   direction: CloudStateDirection;
@@ -96,8 +97,12 @@ function getCommandScopeKey(key: SharedCommandStateKey): string {
 }
 
 async function shouldUseCloudSync(userId: string): Promise<boolean> {
-  void userId;
-  return true;
+  try {
+    return (await getEffectiveUserSharedSettings(userId)).cloudSyncEnabled;
+  } catch (error) {
+    logger.warn(`Failed resolving shared settings for command shared state (${userId})`, error);
+    return false;
+  }
 }
 
 async function loadLocalCommandState(userId: string, key: SharedCommandStateKey): Promise<{ state: Record<string, unknown> | null; updatedAt: number | null }> {
@@ -111,7 +116,7 @@ async function loadLocalCommandState(userId: string, key: SharedCommandStateKey)
   }
 
   return {
-    state: toObjectRecord(row?.data) ?? null,
+    state: row?.data ? normalizeSharedCommandState(key, toObjectRecord(row.data)) as Record<string, unknown> : null,
     updatedAt: Number.isFinite(Number(row?.updatedAt)) ? Number(row?.updatedAt) : null,
   };
 }
@@ -119,21 +124,22 @@ async function loadLocalCommandState(userId: string, key: SharedCommandStateKey)
 async function saveLocalCommandState(userId: string, key: SharedCommandStateKey, state: Record<string, unknown>): Promise<void> {
   const database = getToolsBotDb();
   const recordId = localRecordId(key);
+  const normalizedState = normalizeSharedCommandState(key, state) as Record<string, unknown>;
 
   await database.shardSplitterSettings.put({
     id: stableLocalId(userId, key),
     userId,
     collection: SHARED_COLLECTION,
     recordId,
-    data: state,
+    data: normalizedState,
     updatedAt: Date.now(),
   });
 }
 
-async function getCollectionDocumentOrNull(
+async function getCollectionDocumentWithId(
   userId: string,
   collectionId: string,
-): Promise<Record<string, unknown> | null> {
+): Promise<{ documentId: string; document: Record<string, unknown> } | null> {
   const cfg = getAppConfig();
   if (!cfg.appwrite) {
     return null;
@@ -144,27 +150,13 @@ async function getCollectionDocumentOrNull(
     return null;
   }
 
-  try {
-    return await client.databases.getDocument(
-      cfg.appwrite.cloudDatabaseId,
-      collectionId,
-      userId,
-    ) as unknown as Record<string, unknown>;
-  } catch (error) {
-    if (isCloudNotFoundError(error)) {
-      return null;
-    }
-
-    throw error;
-  }
-}
-
-async function getCollectionDocumentWithId(
-  userId: string,
-  collectionId: string,
-): Promise<{ documentId: string; document: Record<string, unknown> } | null> {
   const candidates = await resolveCloudUserIdCandidates(userId);
-  return findFirstResolvedCloudDocument(candidates, candidate => getCollectionDocumentOrNull(candidate, collectionId));
+  return await resolveDocumentByCandidates({
+    databases: client.databases,
+    databaseId: cfg.appwrite.cloudDatabaseId,
+    collectionId,
+    candidateDocumentIds: candidates,
+  });
 }
 
 async function loadCloudCommandState(userId: string, key: SharedCommandStateKey): Promise<{ state: Record<string, unknown> | null; updatedAt: number | null }> {
@@ -199,14 +191,14 @@ async function loadCloudCommandState(userId: string, key: SharedCommandStateKey)
     const direct = toObjectRecord(settings[key]);
     if (direct) {
       return {
-        state: direct,
+        state: normalizeSharedCommandState(key, direct) as Record<string, unknown>,
         updatedAt: parseIsoTimestampToMillis(doc.updatedAt ?? doc.$updatedAt),
       };
     }
 
     const nested = toObjectRecord(toObjectRecord(settings.commandSharedSettings)?.[key]);
     return {
-      state: nested ?? null,
+      state: nested ? normalizeSharedCommandState(key, nested) as Record<string, unknown> : null,
       updatedAt: parseIsoTimestampToMillis(doc.updatedAt ?? doc.$updatedAt),
     };
   } catch (error) {
@@ -233,42 +225,30 @@ async function saveCloudCommandState(userId: string, key: SharedCommandStateKey,
     const nowIso = new Date().toISOString();
     const route = getCollectionRoute(cfg.appwrite, key);
     const candidates = await resolveCloudUserIdCandidates(userId);
-    const existingResolved = await getCollectionDocumentWithId(userId, route.primary);
-    const existing = existingResolved?.document;
-    const targetDocumentId = existingResolved?.documentId ?? candidates[0] ?? userId;
+    const normalizedState = normalizeSharedCommandState(key, state) as Record<string, unknown>;
 
-    const existingBlob = typeof existing?.data === 'string'
-      ? (parseSharedCommandStateBlob(existing.data) ?? {})
-      : {};
+    await mutateCloudJsonBlobDocument({
+      databases: client.databases,
+      databaseId: cfg.appwrite.cloudDatabaseId,
+      collectionId: route.primary,
+      candidateDocumentIds: candidates,
+      fallbackDocumentId: userId,
+      nowIso,
+      parseBlob: raw => (typeof raw === 'string' ? (parseSharedCommandStateBlob(raw) ?? {}) : null),
+      mutate: existingBlob => {
+        const nextSettings = {
+          ...(toObjectRecord(existingBlob.settings) ?? {}),
+          [key]: normalizedState,
+        };
 
-    const nextSettings = {
-      ...(toObjectRecord(existingBlob.settings) ?? {}),
-      [key]: state,
-    };
+        const nextBlob: SharedCommandStateBlob = {
+          ...existingBlob,
+          settings: nextSettings,
+        };
 
-    const nextBlob: SharedCommandStateBlob = {
-      ...existingBlob,
-      settings: nextSettings,
-    };
-
-    const payload = createCloudJsonBlobPayload(existing ?? null, nextBlob, nowIso);
-
-    if (existing) {
-      await client.databases.updateDocument(
-        cfg.appwrite.cloudDatabaseId,
-        route.primary,
-        targetDocumentId,
-        payload,
-      );
-      return true;
-    }
-
-    await client.databases.createDocument(
-      cfg.appwrite.cloudDatabaseId,
-      route.primary,
-      targetDocumentId,
-      payload,
-    );
+        return nextBlob;
+      },
+    });
     return true;
   } catch (error) {
     logger.warn(`Failed saving ${key} command cloud state`, error);
@@ -276,7 +256,7 @@ async function saveCloudCommandState(userId: string, key: SharedCommandStateKey,
   }
 }
 
-export async function getUserCommandSharedState<T extends Record<string, unknown>>(
+export async function getUserCommandSharedState<T extends object>(
   userId: string,
   key: SharedCommandStateKey,
   normalize: (input: Record<string, unknown> | null) => T,
@@ -290,7 +270,7 @@ export async function getUserCommandSharedState<T extends Record<string, unknown
   }
 }
 
-export async function reconcileUserCommandSharedState<T extends Record<string, unknown>>(
+export async function reconcileUserCommandSharedState<T extends object>(
   userId: string,
   key: SharedCommandStateKey,
   normalize: (input: Record<string, unknown> | null) => T,
@@ -321,19 +301,19 @@ export async function reconcileUserCommandSharedState<T extends Record<string, u
     cloud: normalizedCloud,
     autoCloudEnabled,
     normalize: input => input ?? normalize(null),
-    saveLocal: async state => saveLocalCommandState(userId, key, state),
+    saveLocal: async state => saveLocalCommandState(userId, key, state as Record<string, unknown>),
     queueCloudSync: async state => {
       await syncCloudOutboxState({
         userId,
         scope: getCommandScopeKey(key),
-        payload: state as unknown as Record<string, unknown>,
+        payload: state as Record<string, unknown>,
         send: async payload => saveCloudCommandState(userId, key, payload),
       });
     },
   });
 }
 
-export async function saveUserCommandSharedState<T extends Record<string, unknown>>(
+export async function saveUserCommandSharedState<T extends object>(
   userId: string,
   key: SharedCommandStateKey,
   state: T,
@@ -342,14 +322,14 @@ export async function saveUserCommandSharedState<T extends Record<string, unknow
   try {
     await saveSyncedToolState({
       state,
-      normalize: input => normalize(input),
-      saveLocal: async normalized => saveLocalCommandState(userId, key, normalized),
+      normalize: input => normalize(input as Record<string, unknown> | null),
+      saveLocal: async normalized => saveLocalCommandState(userId, key, normalized as Record<string, unknown>),
       isCloudSyncEnabled: async () => await shouldUseCloudSync(userId),
       queueCloudSync: async normalized => {
         await syncCloudOutboxState({
           userId,
           scope: getCommandScopeKey(key),
-          payload: normalized as unknown as Record<string, unknown>,
+          payload: normalized as Record<string, unknown>,
           send: async payload => saveCloudCommandState(userId, key, payload),
         });
       },

@@ -1,4 +1,13 @@
-import { BaseInteraction, MessageComponentInteraction, ModalSubmitInteraction } from 'discord.js';
+import {
+  BaseInteraction,
+  ChannelSelectMenuInteraction,
+  MentionableSelectMenuInteraction,
+  MessageComponentInteraction,
+  ModalSubmitInteraction,
+  RoleSelectMenuInteraction,
+  StringSelectMenuInteraction,
+  UserSelectMenuInteraction,
+} from 'discord.js';
 
 export interface ScopedInteractionSessionRegistration {
   sessionId: string;
@@ -17,8 +26,18 @@ interface ScopedInteractionSession {
   expiresAt: number;
 }
 
-function isScopedInteraction(interaction: BaseInteraction): interaction is MessageComponentInteraction | ModalSubmitInteraction {
-  return interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit();
+function isScopedInteraction(
+  interaction: BaseInteraction,
+): interaction is MessageComponentInteraction | ModalSubmitInteraction | StringSelectMenuInteraction | UserSelectMenuInteraction | RoleSelectMenuInteraction | MentionableSelectMenuInteraction | ChannelSelectMenuInteraction {
+  return (
+    interaction.isButton()
+    || interaction.isStringSelectMenu()
+    || interaction.isUserSelectMenu()
+    || interaction.isRoleSelectMenu()
+    || interaction.isMentionableSelectMenu()
+    || interaction.isChannelSelectMenu()
+    || interaction.isModalSubmit()
+  );
 }
 
 export class ScopedInteractionSessionRegistry {
@@ -50,8 +69,12 @@ export class ScopedInteractionSessionRegistry {
       }
 
       if (interaction.isModalSubmit()) {
-        if (session.modalCustomIds?.has(interaction.customId)) {
-          return true;
+        if (session.modalCustomIds) {
+          for (const customId of session.modalCustomIds) {
+            if (interaction.customId === customId || interaction.customId.startsWith(customId)) {
+              return true;
+            }
+          }
         }
         continue;
       }

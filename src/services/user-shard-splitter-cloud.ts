@@ -2,18 +2,17 @@ import {
   normalizeShardSplitterSnapshot,
   type ShardSplitterSnapshot,
 } from '@tmrxjd/platform/tools';
+import { z } from 'zod';
 import { getAppConfig } from '../config';
 import { logger } from '../core/logger';
 import { getAppwriteClient } from './appwrite-client';
 import { resolveCloudUserIdCandidates } from './cloud-user-resolution';
 import {
-  createCloudJsonBlobPayload,
-  findFirstResolvedCloudDocument,
-  isCloudNotFoundError,
   parseCloudJsonBlob,
   parseIsoTimestampToMillis,
   toObjectRecord,
 } from '@tmrxjd/platform/tools';
+import { mutateCloudJsonBlobDocument, resolveDocumentByCandidates } from '@tmrxjd/platform/node';
 
 export type CloudShardSplitterState = {
   snapshot: ShardSplitterSnapshot;
@@ -25,6 +24,27 @@ type CloudModulesBlobState = {
   settings?: Record<string, unknown>;
   [key: string]: unknown;
 };
+
+const modulesDocumentSchema = z.object({
+  data: z.string(),
+  updatedAt: z.string().optional(),
+  $updatedAt: z.string().optional(),
+}).passthrough();
+
+const shardRawDataSchema = z.record(z.string(), z.unknown());
+
+const shardSplitterCloudStateSchema = z.object({
+  snapshot: z.record(z.string(), z.unknown()).transform(value => normalizeShardSplitterSnapshot(value)),
+  rawData: shardRawDataSchema,
+  updatedAt: z.number().nullable().optional(),
+}).transform(({ snapshot, rawData, updatedAt }) => ({
+  snapshot,
+  rawData: {
+    ...rawData,
+    ...snapshot,
+  },
+  updatedAt: updatedAt ?? null,
+}));
 
 function extractShardRawData(blob: CloudModulesBlobState): Record<string, unknown> | null {
   const settings = toObjectRecord(blob.settings);
@@ -45,7 +65,7 @@ function extractShardRawData(blob: CloudModulesBlobState): Record<string, unknow
   return null;
 }
 
-async function getModulesDocumentOrNull(userId: string): Promise<Record<string, unknown> | null> {
+async function getModulesDocumentWithId(userId: string): Promise<{ documentId: string; document: Record<string, unknown> } | null> {
   const cfg = getAppConfig();
   if (!cfg.appwrite) {
     return null;
@@ -56,33 +76,23 @@ async function getModulesDocumentOrNull(userId: string): Promise<Record<string, 
     return null;
   }
 
-  try {
-    return await client.databases.getDocument(
-      cfg.appwrite.cloudDatabaseId,
-      cfg.appwrite.modulesCollectionId,
-      userId,
-    ) as unknown as Record<string, unknown>;
-  } catch (error) {
-    if (isCloudNotFoundError(error)) {
-      return null;
-    }
-
-    throw error;
-  }
-}
-
-async function getModulesDocumentWithId(userId: string): Promise<{ documentId: string; document: Record<string, unknown> } | null> {
   const candidates = await resolveCloudUserIdCandidates(userId);
-  return findFirstResolvedCloudDocument(candidates, candidate => getModulesDocumentOrNull(candidate));
+  return await resolveDocumentByCandidates({
+    databases: client.databases,
+    databaseId: cfg.appwrite.cloudDatabaseId,
+    collectionId: cfg.appwrite.modulesCollectionId,
+    candidateDocumentIds: candidates,
+  });
 }
 
 export async function loadUserShardSplitterCloudState(userId: string): Promise<CloudShardSplitterState | null> {
   try {
     const resolved = await getModulesDocumentWithId(userId);
-    const doc = resolved?.document;
-    if (!doc || typeof doc.data !== 'string') {
+    const rawDoc = resolved?.document;
+    if (!rawDoc || typeof rawDoc.data !== 'string') {
       return null;
     }
+    const doc = modulesDocumentSchema.parse(rawDoc);
 
     const parsed = parseCloudJsonBlob(doc.data) as CloudModulesBlobState | null;
     if (!parsed) {
@@ -93,12 +103,11 @@ export async function loadUserShardSplitterCloudState(userId: string): Promise<C
       return null;
     }
 
-    const snapshot = normalizeShardSplitterSnapshot(rawData);
-    return {
-      snapshot,
-      rawData,
+    return shardSplitterCloudStateSchema.parse({
+      snapshot: rawData,
+      rawData: shardRawDataSchema.parse(rawData),
       updatedAt: parseIsoTimestampToMillis(doc.updatedAt ?? doc.$updatedAt),
-    };
+    });
   } catch (error) {
     logger.warn('Failed loading shard splitter cloud state', error);
     return null;
@@ -117,47 +126,36 @@ export async function saveUserShardSplitterCloudState(userId: string, state: Clo
   }
 
   try {
+    const parsedState = shardSplitterCloudStateSchema.parse(state);
     const nowIso = new Date().toISOString();
     const candidates = await resolveCloudUserIdCandidates(userId);
-    const existingResolved = await getModulesDocumentWithId(userId);
-    const existing = existingResolved?.document;
-    const targetDocumentId = existingResolved?.documentId ?? candidates[0] ?? userId;
 
     const mergedShardData: Record<string, unknown> = {
-      ...state.rawData,
-      ...state.snapshot,
+      ...parsedState.rawData,
+      ...parsedState.snapshot,
     };
 
-    const existingBlob = (parseCloudJsonBlob(existing?.data) as CloudModulesBlobState | null) ?? {};
+    await mutateCloudJsonBlobDocument({
+      databases: client.databases,
+      databaseId: cfg.appwrite.cloudDatabaseId,
+      collectionId: cfg.appwrite.modulesCollectionId,
+      candidateDocumentIds: candidates,
+      fallbackDocumentId: userId,
+      nowIso,
+      mutate: existingBlob => {
+        const nextSettings = {
+          ...(toObjectRecord(existingBlob.settings) ?? {}),
+          shardSplitter: mergedShardData,
+        };
 
-    const nextSettings = {
-      ...(toObjectRecord(existingBlob.settings) ?? {}),
-      shardSplitter: mergedShardData,
-    };
+        const nextBlob: CloudModulesBlobState = {
+          ...existingBlob,
+          settings: nextSettings,
+        };
 
-    const nextBlob: CloudModulesBlobState = {
-      ...existingBlob,
-      settings: nextSettings,
-    };
-
-    const payload = createCloudJsonBlobPayload(existing ?? null, nextBlob, nowIso);
-
-    if (existing) {
-      await client.databases.updateDocument(
-        cfg.appwrite.cloudDatabaseId,
-        cfg.appwrite.modulesCollectionId,
-        targetDocumentId,
-        payload,
-      );
-      return true;
-    }
-
-    await client.databases.createDocument(
-      cfg.appwrite.cloudDatabaseId,
-      cfg.appwrite.modulesCollectionId,
-      targetDocumentId,
-      payload,
-    );
+        return nextBlob;
+      },
+    });
     return true;
   } catch (error) {
     logger.warn('Failed saving shard splitter cloud state', error);

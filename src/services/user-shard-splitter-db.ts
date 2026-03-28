@@ -8,6 +8,7 @@ import {
   SHARD_SPLITTER_RECORD_ID,
   type ShardSplitterSnapshot,
 } from '@tmrxjd/platform/tools';
+import { z } from 'zod';
 import { getToolsBotDb } from './idb';
 import { logger } from '../core/logger';
 import {
@@ -15,6 +16,7 @@ import {
   saveUserShardSplitterCloudState,
 } from './user-shard-splitter-cloud';
 import { syncCloudOutboxState } from './cloud-sync-outbox';
+import { getEffectiveUserSharedSettings } from './user-shared-settings-db';
 
 const SHARD_SPLITTER_SCOPE = 'shard-splitter-state';
 
@@ -31,6 +33,19 @@ export type UserShardSplitterState = {
   rawData: Record<string, unknown>;
 };
 
+const shardSplitterRawDataSchema = z.record(z.string(), z.unknown());
+
+const userShardSplitterStateSchema = z.object({
+  snapshot: z.record(z.string(), z.unknown()).transform(value => normalizeShardSplitterSnapshot(value)),
+  rawData: shardSplitterRawDataSchema,
+}).transform(({ snapshot, rawData }) => ({
+  snapshot,
+  rawData: {
+    ...rawData,
+    ...snapshot,
+  },
+}));
+
 export type ShardSplitterReconcileResult = {
   autoCloudEnabled: boolean;
   hasDifference: boolean;
@@ -44,8 +59,28 @@ export type ShardSplitterReconcileResult = {
 };
 
 async function isCloudSyncEnabledForUser(userId: string): Promise<boolean> {
-  void userId;
-  return true;
+  try {
+    return (await getEffectiveUserSharedSettings(userId)).cloudSyncEnabled;
+  } catch (error) {
+    logger.warn('Failed to resolve shared settings for shard splitter sync gating', error);
+    return false;
+  }
+}
+
+function getDefaultUserShardSplitterState(): UserShardSplitterState {
+  const snapshot = createDefaultShardSplitterSnapshot();
+  return {
+    snapshot,
+    rawData: { ...snapshot },
+  };
+}
+
+function normalizeUserShardSplitterState(state: UserShardSplitterState | null | undefined): UserShardSplitterState {
+  if (!state) {
+    return getDefaultUserShardSplitterState();
+  }
+
+  return userShardSplitterStateSchema.parse(state);
 }
 
 async function loadLocalUserShardSplitterState(userId: string): Promise<{ state: UserShardSplitterState | null; updatedAt: number | null }> {
@@ -69,8 +104,10 @@ async function loadLocalUserShardSplitterState(userId: string): Promise<{ state:
     };
   }
 
-  const rawData = row.data as Record<string, unknown>;
-  const snapshot = normalizeShardSplitterSnapshot(rawData);
+  const parsedState = userShardSplitterStateSchema.parse({
+    snapshot: row.data,
+    rawData: row.data as Record<string, unknown>,
+  });
 
   if (row.id !== stableId) {
     await database.shardSplitterSettings.put({
@@ -78,36 +115,27 @@ async function loadLocalUserShardSplitterState(userId: string): Promise<{ state:
       userId,
       collection: SHARD_SPLITTER_COLLECTION,
       recordId: SHARD_SPLITTER_RECORD_ID,
-      data: {
-        ...rawData,
-        ...snapshot,
-      },
+      data: parsedState.rawData,
       updatedAt: Date.now(),
     });
   }
 
   return {
-    state: {
-      snapshot,
-      rawData,
-    },
+    state: parsedState,
     updatedAt: Number.isFinite(Number(row.updatedAt)) ? Number(row.updatedAt) : null,
   };
 }
 
 async function saveLocalUserShardSplitterState(userId: string, state: UserShardSplitterState): Promise<void> {
   const database = getToolsBotDb();
-  const merged = {
-    ...state.rawData,
-    ...state.snapshot,
-  };
+  const normalizedState = normalizeUserShardSplitterState(state);
 
   await database.shardSplitterSettings.put({
     id: makeStableShardSplitterRowId(userId),
     userId,
     collection: SHARD_SPLITTER_COLLECTION,
     recordId: SHARD_SPLITTER_RECORD_ID,
-    data: merged,
+    data: normalizedState.rawData,
     updatedAt: Date.now(),
   });
 }
@@ -119,18 +147,10 @@ export async function getUserShardSplitterState(userId: string): Promise<UserSha
       return local.state;
     }
 
-    const snapshot = createDefaultShardSplitterSnapshot();
-    return {
-      snapshot,
-      rawData: { ...snapshot },
-    };
+    return getDefaultUserShardSplitterState();
   } catch (error) {
     logger.warn('Failed to read shard splitter settings, using defaults', error);
-    const snapshot = createDefaultShardSplitterSnapshot();
-    return {
-      snapshot,
-      rawData: { ...snapshot },
-    };
+    return getDefaultUserShardSplitterState();
   }
 }
 
@@ -138,7 +158,7 @@ export async function saveUserShardSplitterState(userId: string, state: UserShar
   try {
     await saveSyncedToolState({
       state,
-      normalize: input => input,
+      normalize: input => normalizeUserShardSplitterState(input),
       saveLocal: async normalized => saveLocalUserShardSplitterState(userId, normalized),
       isCloudSyncEnabled: async () => await isCloudSyncEnabledForUser(userId),
       queueCloudSync: async normalized => {
@@ -168,8 +188,6 @@ export async function reconcileUserShardSplitterState(userId: string): Promise<S
     };
   }
 
-  const defaultSnapshot = createDefaultShardSplitterSnapshot();
-
   return buildSyncedStateReconcileResult({
     local,
     cloud: {
@@ -177,10 +195,7 @@ export async function reconcileUserShardSplitterState(userId: string): Promise<S
       updatedAt: cloud?.updatedAt ?? null,
     },
     autoCloudEnabled,
-    normalize: input => input ?? {
-      snapshot: defaultSnapshot,
-      rawData: { ...defaultSnapshot },
-    },
+    normalize: input => normalizeUserShardSplitterState(input),
     saveLocal: async state => saveLocalUserShardSplitterState(userId, state),
     queueCloudSync: async state => {
       await syncCloudOutboxState({

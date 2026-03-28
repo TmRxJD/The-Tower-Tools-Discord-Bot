@@ -12,6 +12,7 @@ import { getBotConfig } from '../config/bot-config'
 import { getEffectiveUserSharedSettings, getUserSharedSettings, reconcileUserSharedSettings, saveUserSharedSettings } from '../services/user-shared-settings-db'
 import { runCloudReconcileUi } from '../services/cloud-reconcile-ui'
 import { resolveCanonicalAppwriteUserId } from '../services/identity'
+import type { ToolsBotClient } from '../core/tools-bot-client'
 
 const settingsConfig = getBotConfig().commands.settings
 
@@ -201,6 +202,14 @@ export const settingsCommand: CommandModule = {
 
     const reply = await interaction.fetchReply()
     if ('createMessageComponentCollector' in reply) {
+      const client = interaction.client as ToolsBotClient
+      const scopedSessionId = `settings:${interaction.id}`
+      client.scopedInteractionSessions.register({
+        sessionId: scopedSessionId,
+        ownerUserId: interaction.user.id,
+        messageId: reply.id,
+        ttlMs: 10 * 60 * 1000,
+      })
       const collector = reply.createMessageComponentCollector({
         time: 10 * 60 * 1000,
         filter: componentInteraction => componentInteraction.user.id === interaction.user.id,
@@ -237,6 +246,7 @@ export const settingsCommand: CommandModule = {
       })
 
       collector.on('end', async () => {
+        client.scopedInteractionSessions.unregister(scopedSessionId)
         await interaction.editReply({ components: [] }).catch(() => {})
       })
     }
