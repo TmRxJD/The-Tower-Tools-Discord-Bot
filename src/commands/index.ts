@@ -7,6 +7,8 @@ import { creatorCommand } from './creator';
 import { userCommand } from './user';
 import { defineCommand } from './define';
 import { defineMessageCommand } from './define-message';
+import { acronymCommand } from './acronym';
+import { acronymsCommand } from './acronyms';
 import { earningsCommand } from './earnings';
 import { meowCommand } from './meow';
 import { toolsCommand } from './tools';
@@ -25,6 +27,7 @@ import { reloadCommand } from './reload';
 import { settingsCommand } from './settings';
 import { shardSplitterCommand } from './shard-splitter';
 import { guardianCommand } from './guardian';
+import { battleConditionsCommand } from './battle-conditions';
 
 export const commandModules: CommandModule[] = [
   askCommand,
@@ -35,6 +38,8 @@ export const commandModules: CommandModule[] = [
   userCommand,
   defineCommand,
   defineMessageCommand,
+  acronymCommand,
+  acronymsCommand,
   earningsCommand,
   meowCommand,
   toolsCommand,
@@ -53,4 +58,5 @@ export const commandModules: CommandModule[] = [
   settingsCommand,
   shardSplitterCommand,
   guardianCommand,
+  battleConditionsCommand,
 ];

@@ -2,9 +2,11 @@ import {
   buildSyncedStateReconcileResult,
   computeCloudStateDirection,
   defaultSharedUserToolSettings,
+  governedDateFormatPreferenceIds,
+  governedDecimalSeparatorPreferenceIds,
+  governedLanguagePreferenceIds,
   normalizeSharedUserToolSettings,
   sharedUserToolSettingsSchema,
-  type SharedUserToolSettings,
 } from '@tmrxjd/platform/tools'
 import { getToolsBotDb } from './idb'
 import { logger } from '../core/logger'
@@ -14,19 +16,32 @@ import { resolveCanonicalAppwriteUserId } from './identity'
 
 const SHARED_SETTINGS_SCOPE = 'shared-settings'
 
+type LocalLanguagePreference = (typeof governedLanguagePreferenceIds)[number]
+type LocalDateFormatPreference = (typeof governedDateFormatPreferenceIds)[number]
+type LocalDecimalSeparatorPreference = (typeof governedDecimalSeparatorPreferenceIds)[number]
+
+export type LocalSharedUserToolSettings = {
+  cloudSyncEnabled: boolean
+  chartPalettePreset: 'default' | 'accent-warning' | 'accent-success'
+  chartDataAlignment: 'left' | 'center' | 'right'
+  languagePreference: LocalLanguagePreference
+  dateFormatPreference: LocalDateFormatPreference
+  decimalSeparatorPreference: LocalDecimalSeparatorPreference
+}
+
 export type SharedSettingsReconcileResult = {
   autoCloudEnabled: boolean
   hasDifference: boolean
   direction: 'cloud-newer' | 'local-newer' | 'unknown'
   localUpdatedAt: number | null
   cloudUpdatedAt: number | null
-  localState: SharedUserToolSettings
-  cloudState: SharedUserToolSettings | null
-  applyCloudToLocal: () => Promise<SharedUserToolSettings | null>
+  localState: LocalSharedUserToolSettings
+  cloudState: LocalSharedUserToolSettings | null
+  applyCloudToLocal: () => Promise<LocalSharedUserToolSettings | null>
   applyLocalToCloud: () => Promise<void>
 }
 
-async function loadLocalSharedSettings(userId: string): Promise<{ state: SharedUserToolSettings; updatedAt: number | null }> {
+async function loadLocalSharedSettings(userId: string): Promise<{ state: LocalSharedUserToolSettings; updatedAt: number | null }> {
   const database = getToolsBotDb()
   const row = await database.sharedUserSettings.get(userId)
   const local = row
@@ -43,7 +58,7 @@ async function loadLocalSharedSettings(userId: string): Promise<{ state: SharedU
   }
 }
 
-async function saveLocalSharedSettings(userId: string, settings: SharedUserToolSettings): Promise<void> {
+async function saveLocalSharedSettings(userId: string, settings: LocalSharedUserToolSettings): Promise<void> {
   const normalized = normalizeSharedUserToolSettings(settings)
   const database = getToolsBotDb()
   await database.sharedUserSettings.put({
@@ -55,7 +70,7 @@ async function saveLocalSharedSettings(userId: string, settings: SharedUserToolS
   })
 }
 
-export async function getUserSharedSettings(userId: string): Promise<SharedUserToolSettings> {
+export async function getUserSharedSettings(userId: string): Promise<LocalSharedUserToolSettings> {
   try {
     const local = await loadLocalSharedSettings(userId)
     return local.state
@@ -65,13 +80,16 @@ export async function getUserSharedSettings(userId: string): Promise<SharedUserT
   }
 }
 
-function hasMeaningfulSharedSettings(candidate: SharedUserToolSettings): boolean {
+function hasMeaningfulSharedSettings(candidate: LocalSharedUserToolSettings): boolean {
   return candidate.cloudSyncEnabled !== defaultSharedUserToolSettings.cloudSyncEnabled
     || candidate.chartPalettePreset !== defaultSharedUserToolSettings.chartPalettePreset
     || candidate.chartDataAlignment !== defaultSharedUserToolSettings.chartDataAlignment
+    || candidate.languagePreference !== defaultSharedUserToolSettings.languagePreference
+    || candidate.dateFormatPreference !== defaultSharedUserToolSettings.dateFormatPreference
+    || candidate.decimalSeparatorPreference !== defaultSharedUserToolSettings.decimalSeparatorPreference
 }
 
-export async function getEffectiveUserSharedSettings(discordUserId: string): Promise<SharedUserToolSettings> {
+export async function getEffectiveUserSharedSettings(discordUserId: string): Promise<LocalSharedUserToolSettings> {
   const primary = await getUserSharedSettings(discordUserId)
   const canonicalUserId = resolveCanonicalAppwriteUserId(discordUserId)
 
@@ -96,9 +114,9 @@ export async function getEffectiveUserSharedSettings(discordUserId: string): Pro
   return primary
 }
 
-export async function saveUserSharedSettings(userId: string, settings: SharedUserToolSettings): Promise<void> {
+export async function saveUserSharedSettings(userId: string, settings: LocalSharedUserToolSettings): Promise<void> {
   try {
-    const normalized = sharedUserToolSettingsSchema.parse(normalizeSharedUserToolSettings(settings))
+    const normalized = sharedUserToolSettingsSchema.parse(normalizeSharedUserToolSettings(settings)) as LocalSharedUserToolSettings
     const [existingLocal, existingCloud] = await Promise.all([
       loadLocalSharedSettings(userId),
       loadUserSharedSettingsCloud(userId),
@@ -118,7 +136,7 @@ export async function saveUserSharedSettings(userId: string, settings: SharedUse
       userId,
       scope: SHARED_SETTINGS_SCOPE,
       payload: normalized as unknown as Record<string, unknown>,
-      send: async payload => saveUserSharedSettingsCloud(userId, payload as unknown as SharedUserToolSettings),
+      send: async payload => saveUserSharedSettingsCloud(userId, payload as unknown as LocalSharedUserToolSettings),
     })
   } catch (error) {
     logger.warn('Failed to save shared user settings', error)
@@ -151,7 +169,7 @@ export async function reconcileUserSharedSettings(userId: string): Promise<Share
         userId,
         scope: SHARED_SETTINGS_SCOPE,
         payload: state as unknown as Record<string, unknown>,
-        send: async payload => saveUserSharedSettingsCloud(userId, payload as unknown as SharedUserToolSettings),
+        send: async payload => saveUserSharedSettingsCloud(userId, payload as unknown as LocalSharedUserToolSettings),
       })
     },
   })

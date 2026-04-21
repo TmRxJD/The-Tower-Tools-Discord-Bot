@@ -32,6 +32,7 @@ const envKeys = [
   'TRACKERAI_KB_CHUNKS_FILE_ID',
   'TRACKERAI_KB_INDEX_FILE_ID',
 ]
+const platformRegistry = getEnv('TMRXJD_PLATFORM_REGISTRY', 'https://npm.pkg.github.com')
 
 function getEnv(name, fallback = '') {
   const value = process.env[name]
@@ -101,11 +102,7 @@ function checkPm2() {
 }
 
 function checkPackageAccess() {
-  const token = getEnv('GITHUB_PACKAGES_TOKEN')
-  if (!token) {
-    throw new Error('GITHUB_PACKAGES_TOKEN is required to install @tmrxjd/platform from GitHub Packages')
-  }
-  execSync('pnpm view @tmrxjd/platform version --registry https://npm.pkg.github.com --json', {
+  execSync(`pnpm view @tmrxjd/platform version --registry ${platformRegistry} --json`, {
     stdio: 'ignore',
     env: process.env,
   })

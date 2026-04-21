@@ -1,5 +1,9 @@
 import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import type {
+  BattleConditionsChannelMap,
+  BattleConditionsDeliveredDates,
+} from '@tmrxjd/platform/tools';
 import sqlite3 from 'sqlite3';
 import { logger } from '../core/logger';
 
@@ -84,6 +88,55 @@ export interface CloudSyncOutboxRecord {
   lastError: string | null;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface BattleConditionsSubscriptionRecord {
+  guildId: string;
+  channels: BattleConditionsChannelMap;
+  deliveredTournamentDates: BattleConditionsDeliveredDates;
+  updatedAt: number;
+}
+
+export interface BattleConditionsSchedulerStateRecord {
+  id: string;
+  windowKey: string | null;
+  lastPolledAt: number | null;
+  resolvedAt: number | null;
+  lastSeenTournamentDates: BattleConditionsDeliveredDates;
+  updatedAt: number;
+}
+
+export interface AcronymOverrideRecord {
+  key: string;
+  expansion: string;
+  updatedAt: number;
+  updatedByUserId?: string;
+}
+
+export interface AcronymRemovalRecord {
+  key: string;
+  updatedAt: number;
+  updatedByUserId?: string;
+}
+
+export type AcronymProposalAction = 'add' | 'remove';
+export type AcronymProposalStatus = 'pending' | 'approved' | 'denied';
+
+export interface AcronymProposalRecord {
+  id: string;
+  guildId: string;
+  requesterUserId: string;
+  requestChannelId: string;
+  helpersChannelId: string;
+  action: AcronymProposalAction;
+  key: string;
+  expansion?: string;
+  existingExpansion?: string;
+  status: AcronymProposalStatus;
+  createdAt: number;
+  helpersMessageId?: string;
+  reviewedAt?: number;
+  reviewedByUserId?: string;
 }
 
 type RowRecord = { value: string };
@@ -292,6 +345,10 @@ class TableAdapter<T extends object, K extends string | number> {
     await deleteRow(this.tableName, String(key));
   }
 
+  async toArray(): Promise<T[]> {
+    return getAllRows<T>(this.tableName);
+  }
+
   where(field: string): TableWhere<T> {
     return new TableWhere<T>(this.tableName, field);
   }
@@ -307,6 +364,11 @@ export class ToolsBotDb {
   sharedUserSettings = new TableAdapter<SharedUserSettingsRecord, string>('sharedUserSettings', 'userId');
   shardSplitterSettings = new TableAdapter<ShardSplitterSettingsRecord, string>('shardSplitterSettings', 'id');
   cloudSyncOutbox = new TableAdapter<CloudSyncOutboxRecord, string>('cloudSyncOutbox', 'id');
+  battleConditionsSubscriptions = new TableAdapter<BattleConditionsSubscriptionRecord, string>('battleConditionsSubscriptions', 'guildId');
+  battleConditionsSchedulerState = new TableAdapter<BattleConditionsSchedulerStateRecord, string>('battleConditionsSchedulerState', 'id');
+  acronymOverrides = new TableAdapter<AcronymOverrideRecord, string>('acronymOverrides', 'key');
+  acronymRemovals = new TableAdapter<AcronymRemovalRecord, string>('acronymRemovals', 'key');
+  acronymProposals = new TableAdapter<AcronymProposalRecord, string>('acronymProposals', 'id');
 }
 
 let db: ToolsBotDb | null = null;

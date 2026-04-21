@@ -1,28 +1,48 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mockAppConfig = {
+  ai: {
+    cloudEndpoint: 'https://api.groq.test/openai/v1/chat/completions',
+    cloudReasoningModel: 'qwen/qwen3-32b',
+    cloudFallbackReasoningModel: 'openai/gpt-oss-20b',
+  },
+};
+
+const mockBotConfig = {
+  commands: {
+    eightBall: {
+      ai: {
+        endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+        model: 'qwen/qwen3-32b',
+        maxTokens: 100,
+        temperature: 0.9,
+        timeoutMs: 15000,
+        systemPrompt: 'You are a smart, self-aware 8-ball.',
+      },
+    },
+  },
+};
+
+vi.mock('../config', () => ({
+  getAppConfig: () => mockAppConfig,
+}));
+
+vi.mock('../config/bot-config', () => ({
+  getBotConfig: () => mockBotConfig,
+}));
+
 import { getEightBallAiResponse } from './eight-ball-ai';
-import { resetConfig } from '../config';
 
 describe('eight-ball-ai', () => {
-  const originalEnv = {
-    endpoint: process.env.TRACKERAI_CLOUD_AI_ENDPOINT,
-    model: process.env.TRACKERAI_CLOUD_REASONING_MODEL,
-    fallbackModel: process.env.TRACKERAI_CLOUD_FALLBACK_REASONING_MODEL,
-  };
-
   beforeEach(() => {
-    process.env.TRACKERAI_CLOUD_AI_ENDPOINT = 'https://api.groq.test/openai/v1/chat/completions';
-    process.env.TRACKERAI_CLOUD_REASONING_MODEL = 'qwen/qwen3-32b';
-    process.env.TRACKERAI_CLOUD_FALLBACK_REASONING_MODEL = 'openai/gpt-oss-20b';
-    resetConfig();
+    mockAppConfig.ai.cloudEndpoint = 'https://api.groq.test/openai/v1/chat/completions';
+    mockAppConfig.ai.cloudReasoningModel = 'qwen/qwen3-32b';
+    mockAppConfig.ai.cloudFallbackReasoningModel = 'openai/gpt-oss-20b';
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
-    process.env.TRACKERAI_CLOUD_AI_ENDPOINT = originalEnv.endpoint;
-    process.env.TRACKERAI_CLOUD_REASONING_MODEL = originalEnv.model;
-    process.env.TRACKERAI_CLOUD_FALLBACK_REASONING_MODEL = originalEnv.fallbackModel;
-    resetConfig();
   });
 
   it('returns direct chat completion content from the configured model', async () => {
@@ -71,8 +91,7 @@ describe('eight-ball-ai', () => {
   });
 
   it('supports providers that expose the responses endpoint', async () => {
-    process.env.TRACKERAI_CLOUD_AI_ENDPOINT = 'https://api.groq.test/openai/v1/responses';
-    resetConfig();
+    mockAppConfig.ai.cloudEndpoint = 'https://api.groq.test/openai/v1/responses';
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({

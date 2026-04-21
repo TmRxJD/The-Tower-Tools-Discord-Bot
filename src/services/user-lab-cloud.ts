@@ -76,6 +76,28 @@ type LegacyLabProgressDocument = {
   rangeTarget?: number | null;
 };
 
+function normalizeLabProgressRecords(
+  records: Array<{
+    labName?: string;
+    currentLevel?: number | null;
+    rangeStart?: number | null;
+    rangeTarget?: number | null;
+  }> | null | undefined,
+): Array<{ labName: string; currentLevel?: number; rangeStart?: number; rangeTarget?: number }> {
+  if (!Array.isArray(records)) {
+    return [];
+  }
+
+  return records
+    .filter((record): record is NonNullable<typeof record> => !!record && typeof record.labName === 'string' && record.labName.trim().length > 0)
+    .map(record => ({
+      labName: record.labName!.trim(),
+      ...(typeof record.currentLevel === 'number' ? { currentLevel: record.currentLevel } : {}),
+      ...(typeof record.rangeStart === 'number' ? { rangeStart: record.rangeStart } : {}),
+      ...(typeof record.rangeTarget === 'number' ? { rangeTarget: record.rangeTarget } : {}),
+    }));
+}
+
 const labsDocumentSchema = z.object({
   data: z.string(),
   version: z.number().optional(),
@@ -322,7 +344,7 @@ async function loadLegacyLabStateByUserId(userId: string): Promise<LabCloudLoadR
       return null;
     }
 
-    const labLevels = buildLabLevelRangesFromProgressRecords(progressDocs);
+    const labLevels = buildLabLevelRangesFromProgressRecords(normalizeLabProgressRecords(progressDocs));
 
     return {
       settings: normalizeLocalLabSettings({
@@ -374,7 +396,7 @@ export async function loadUserLabSettingsCloud(userId: string, context: LabCloud
     const blob = labBlobSchema.parse(JSON.parse(doc.data));
     const records = Array.isArray(blob.progress?.records) ? blob.progress?.records : [];
 
-    const labLevels = buildLabLevelRangesFromProgressRecords(records);
+    const labLevels = buildLabLevelRangesFromProgressRecords(normalizeLabProgressRecords(records));
 
     const labsSettings = blob.settings?.labs ?? {};
     const ui = toObjectRecord(blob.settings?.ui) ?? {};

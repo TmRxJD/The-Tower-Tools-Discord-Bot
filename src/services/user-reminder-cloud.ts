@@ -9,7 +9,6 @@ import {
   normalizeReminderCompositeState,
   parseCloudJsonBlob,
   parseIsoTimestampToMillis,
-  reminderCompositeStateSchema,
   toObjectRecord,
 } from '@tmrxjd/platform/tools';
 import { mutateCloudJsonBlobDocument, resolveDocumentByCandidates } from '@tmrxjd/platform/node';
@@ -32,9 +31,11 @@ const cloudBlobDocumentSchema = z.object({
   $updatedAt: z.string().optional(),
 }).passthrough();
 
-const reminderStateSchema = reminderCompositeStateSchema.extend({
+const reminderStateSchema = z.object({
+  paused: z.boolean(),
+  toggles: z.record(z.string(), z.boolean()),
   updatedAt: z.number().nullable(),
-});
+}).strict();
 
 async function getCollectionDocumentWithId(
   userId: string,
@@ -121,13 +122,21 @@ export async function loadUserReminderCloudState(userId: string): Promise<CloudR
       toggles[key] = Boolean(value);
     }
 
-    return reminderStateSchema.parse({
+    const updatedAt = parseIsoTimestampToMillis(doc.updatedAt ?? doc.$updatedAt)
+
+    const parsed = reminderStateSchema.parse({
       ...normalizeReminderCompositeState({
         toggles,
         paused: Boolean(reminderObj.paused),
       }),
-      updatedAt: parseIsoTimestampToMillis(doc.updatedAt ?? doc.$updatedAt),
+      updatedAt: typeof updatedAt === 'number' ? updatedAt : null,
     });
+
+    return {
+      toggles: parsed.toggles,
+      paused: parsed.paused,
+      updatedAt: parsed.updatedAt,
+    };
   } catch (error) {
     logger.warn('Failed loading reminder cloud state', error);
     return null;

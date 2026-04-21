@@ -10,14 +10,13 @@ import {
   parseIsoTimestampToMillis,
   saveSyncedToolState,
   sharedCommandStateBlobSchema,
-  type SharedCommandStateKey,
   toObjectRecord,
 } from '@tmrxjd/platform/tools';
 import { mutateCloudJsonBlobDocument, resolveDocumentByCandidates } from '@tmrxjd/platform/node';
 import { syncCloudOutboxState } from './cloud-sync-outbox';
 import { getEffectiveUserSharedSettings } from './user-shared-settings-db';
 
-export type { SharedCommandStateKey } from '@tmrxjd/platform/tools';
+export type SharedCommandStateKey = 'bots' | 'module' | 'workshop' | 'stone' | 'chart' | 'thorns' | 'guardian';
 
 type CollectionRoute = {
   primary: string;
@@ -76,6 +75,12 @@ function getCollectionRoute(cfg: NonNullable<ReturnType<typeof getAppConfig>['ap
   if (key === 'thorns') {
     return {
       primary: cfg.thornsCollectionId,
+    };
+  }
+
+  if (key === 'guardian' || key === 'module') {
+    return {
+      primary: cfg.modulesCollectionId,
     };
   }
 

@@ -1,12 +1,11 @@
 import {
   ApplicationCommandType,
   ContextMenuCommandBuilder,
-  type MessageContextMenuCommandInteraction,
 } from 'discord.js';
-import { expandAcronymsInText } from '@tmrxjd/platform/ai';
 import type { CommandModule } from '../core/command-types';
 import { quoteText } from '../utils/acronym-expansion';
 import { getBotConfig } from '../config/bot-config';
+import { expandManagedAcronymsInText } from '../services/acronym-registry';
 
 const defineMessageConfig = getBotConfig().commands.defineMessage;
 
@@ -21,16 +20,15 @@ export const defineMessageCommand: CommandModule = {
       return;
     }
 
-    const messageInteraction = interaction as MessageContextMenuCommandInteraction;
-    const source = messageInteraction.targetMessage?.content ?? '';
-    const { text: expanded, changed } = expandAcronymsInText(source);
+    const source = interaction.targetMessage?.content ?? '';
+    const { text: expanded, changed } = await expandManagedAcronymsInText(source);
     const quoted = quoteText(source);
 
     if (!changed) {
-      await messageInteraction.reply({ content: quoted || defineMessageConfig.noAcronyms, ephemeral: true });
+      await interaction.reply({ content: quoted || defineMessageConfig.noAcronyms, ephemeral: true });
       return;
     }
 
-    await messageInteraction.reply({ content: `${quoted}\n\n${expanded}`, ephemeral: true });
+    await interaction.reply({ content: `${quoted}\n\n${expanded}`, ephemeral: true });
   },
 };

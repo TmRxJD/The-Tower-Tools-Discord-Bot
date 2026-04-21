@@ -11,13 +11,12 @@ import {
   type ConfigurableTableDocument,
   type SharedTableChartRenderInput,
   resolveChartThemeFromPreset,
-  type SharedUserToolSettings,
 } from '@tmrxjd/platform/tools'
-import { getUserSharedSettings } from './user-shared-settings-db'
+import { getUserSharedSettings, type LocalSharedUserToolSettings } from './user-shared-settings-db'
 
 const runtime = createNapiRsCanvasChartRenderRuntime((width, height) => createCanvas(width, height))
 
-async function resolveChartSettings(discordUserId?: string): Promise<SharedUserToolSettings> {
+async function resolveChartSettings(discordUserId?: string): Promise<LocalSharedUserToolSettings> {
   if (!discordUserId) {
     return defaultSharedUserToolSettings
   }

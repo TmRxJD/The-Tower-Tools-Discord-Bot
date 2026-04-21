@@ -1,4 +1,5 @@
 import {
+  AutocompleteInteraction,
   ChatInputCommandInteraction,
   MessageContextMenuCommandInteraction,
   RESTPostAPIApplicationCommandsJSONBody,
@@ -12,5 +13,6 @@ type ExecuteHandler<TInteraction extends SupportedCommandInteraction> = {
 export interface CommandModule<TInteraction extends SupportedCommandInteraction = SupportedCommandInteraction> {
   data: RESTPostAPIApplicationCommandsJSONBody;
   execute: ExecuteHandler<TInteraction>;
+  autocomplete?: (interaction: AutocompleteInteraction) => Promise<void>;
   cooldownSeconds?: number;
 }

@@ -9,6 +9,7 @@ import { registerInteractionRouter } from './core/interaction-router';
 import { registerEvents } from './events';
 import { commandModules } from './commands';
 import { registerComponentHandlers } from './interactions';
+import { stopBattleConditionsScheduler } from './services/battle-conditions-scheduler';
 import { assertToolsBotPersistentStorage, getToolsBotStorageStatus } from './services/idb';
 import { createPersistence } from './persistence';
 import { prewarmTrackerAiAskRuntime } from './services/trackerai-ask';
@@ -44,6 +45,7 @@ async function bootstrap() {
 
     cleanupStarted = true;
     stopReminderScheduler();
+    stopBattleConditionsScheduler();
     if (error) {
       logger.error(`ToolsBot shutting down after ${reason}`, error);
       process.exitCode = 1;

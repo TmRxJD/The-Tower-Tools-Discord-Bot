@@ -7,6 +7,7 @@ export type DeploymentMode = 'dev' | 'prod';
 
 export interface AppConfig {
   deploymentMode: DeploymentMode;
+  helpersChannelId?: string;
   discord: {
     token: string;
     clientId: string;
@@ -45,6 +46,7 @@ export interface AppConfig {
 
 const envSchema = z.object({
   DEPLOYMENT_MODE: z.enum(['dev', 'prod']).default('dev'),
+  HELPERS_CHANNEL_ID: z.string().optional(),
   DISCORD_TOKEN: z.string().min(1).optional(),
   CLIENT_ID: z.string().min(1).optional(),
   DEV_DISCORD_TOKEN: z.string().min(1).optional(),
@@ -199,6 +201,7 @@ export function loadConfig(): AppConfig {
 
   cachedConfig = {
     deploymentMode: parsed.DEPLOYMENT_MODE,
+    helpersChannelId: firstNonEmpty(parsed.HELPERS_CHANNEL_ID),
     discord: {
       token: discordProfile.token,
       clientId: discordProfile.clientId,

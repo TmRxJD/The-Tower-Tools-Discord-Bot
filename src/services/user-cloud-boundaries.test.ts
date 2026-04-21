@@ -4,7 +4,6 @@ const getDocumentMock = vi.fn();
 const updateDocumentMock = vi.fn();
 const createDocumentMock = vi.fn();
 const listDocumentsMock = vi.fn();
-const getDocumentOrNullMock = vi.fn();
 const resolveCloudUserIdCandidatesMock = vi.fn(async (userId: string) => [userId]);
 
 vi.mock('../config', () => ({
@@ -40,10 +39,6 @@ vi.mock('./identity', () => ({
   resolveCanonicalAppwriteUserId: (value: string) => value,
 }));
 
-vi.mock('./appwrite-document-utils', () => ({
-  getDocumentOrNull: (...args: unknown[]) => getDocumentOrNullMock(...args),
-}));
-
 vi.mock('../core/logger', () => ({
   logger: {
     warn: vi.fn(),
@@ -68,7 +63,6 @@ beforeEach(() => {
   updateDocumentMock.mockReset();
   createDocumentMock.mockReset();
   listDocumentsMock.mockReset();
-  getDocumentOrNullMock.mockReset();
   resolveCloudUserIdCandidatesMock.mockClear();
   resolveCloudUserIdCandidatesMock.mockImplementation(async (userId: string) => [userId]);
   listDocumentsMock.mockResolvedValue({ documents: [] });
@@ -144,9 +138,9 @@ describe('user cloud boundaries', () => {
 
   it('parses lab blobs into validated lab settings with updated timestamps', async () => {
     const updatedAtIso = '2026-03-25T12:00:00.000Z';
-    getDocumentOrNullMock.mockImplementation(async (_databases: unknown, _databaseId: string, _collectionId: string, documentId: string) => {
+    getDocumentMock.mockImplementation(async (_databaseId: string, _collectionId: string, documentId: string) => {
       if (documentId !== 'user-1') {
-        return null;
+        throw new Error('not found');
       }
 
       return {

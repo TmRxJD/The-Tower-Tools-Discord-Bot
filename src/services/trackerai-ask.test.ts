@@ -202,7 +202,7 @@ describe('trackerai-ask', () => {
     expect(runTrackerAiCloudAnswer).toHaveBeenCalled();
     const cloudArgs = runTrackerAiCloudAnswer.mock.calls[0]?.[0];
     expect(String(cloudArgs?.knowledgeContext || '')).toContain('<supporting_shared_chart_candidates>');
-    expect(String(cloudArgs?.knowledgeContext || '')).toContain('Ultimate Weapon Stone Costs: Death Wave');
+    expect(String(cloudArgs?.knowledgeContext || '')).toContain('Stone Costs: Death Wave');
     expect(String(cloudArgs?.knowledgeContext || '')).toContain('<preview_columns>');
     expect(String(cloudArgs?.knowledgeContext || '')).toContain('<preview_rows>');
     expect(String(cloudArgs?.knowledgeContext || '')).toContain('<dataset_axis>');

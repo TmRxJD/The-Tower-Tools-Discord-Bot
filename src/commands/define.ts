@@ -1,8 +1,8 @@
 import { SlashCommandBuilder, type ChatInputCommandInteraction } from 'discord.js';
-import { expandAcronymsInText } from '@tmrxjd/platform/ai';
 import type { CommandModule } from '../core/command-types';
 import { quoteText } from '../utils/acronym-expansion';
 import { getBotConfig } from '../config/bot-config';
+import { expandManagedAcronymsInText } from '../services/acronym-registry';
 
 const defineConfig = getBotConfig().commands.define;
 
@@ -31,7 +31,7 @@ export const defineCommand: CommandModule = {
 
     const textInput = interaction.options.getString(defineConfig.options.text.name, true).trim();
     const isPublic = interaction.options.getBoolean(defineConfig.options.public.name) ?? false;
-    const { text: expanded, changed } = expandAcronymsInText(textInput);
+    const { text: expanded, changed } = await expandManagedAcronymsInText(textInput);
 
     const allowPublic = isPublic && changed;
     const ephemeral = !allowPublic;

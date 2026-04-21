@@ -9,6 +9,16 @@ const commonResponses = getBotConfig().common.responses;
 export function registerInteractionRouter(client: ToolsBotClient) {
   client.on('interactionCreate', async (interaction: Interaction) => {
     try {
+      if (interaction.isAutocomplete()) {
+        const command = client.commands.get(interaction.commandName);
+        if (!command?.autocomplete) {
+          return;
+        }
+
+        await command.autocomplete(interaction);
+        return;
+      }
+
       if (interaction.isChatInputCommand() || interaction.isMessageContextMenuCommand()) {
         const command = client.commands.get(interaction.commandName);
         if (!command) {
