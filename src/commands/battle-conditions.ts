@@ -23,7 +23,7 @@ import {
 } from '../services/battle-conditions-discord';
 import {
   getBattleConditionsSubscription,
-  updateBattleConditionsSubscriptionChannels,
+  updateBattleConditionsSubscriptionSettings,
 } from '../services/battle-conditions-db';
 
 const COMMAND_NAME = 'battle_conditions';
@@ -33,6 +33,7 @@ const OPTION_RANK = 'rank';
 const OPTION_DATE = 'date';
 const OPTION_PUBLIC = 'public';
 const OPTION_CHANNEL = 'channel';
+const OPTION_ENABLE = 'enable';
 
 function isAllowedBattleConditionsTargetChannelType(type: ChannelType): boolean {
   return type === ChannelType.GuildText
@@ -92,7 +93,11 @@ function formatSubscriptionSummary(subscription: Awaited<ReturnType<typeof getBa
   const lines = (battleConditionsRankOrder as LocalBattleConditionsRank[])
     .map(rank => {
       const channelId = subscription.channels[rank];
-      return `${getBattleConditionsRankConfig(rank).label}: ${channelId ? `<#${channelId}>` : 'not configured'}`;
+      if (!channelId) {
+        return `${getBattleConditionsRankConfig(rank).label}: not configured`;
+      }
+
+      return `${getBattleConditionsRankConfig(rank).label}: <#${channelId}> (${subscription.enabled[rank] === false ? 'disabled' : 'enabled'})`;
     });
 
   return lines.join('\n');
@@ -186,8 +191,8 @@ export const battleConditionsCommand: CommandModule = {
         .addChannelOption(option =>
           option
             .setName(OPTION_CHANNEL)
-            .setDescription('Channel that should receive reposts')
-            .setRequired(true)
+            .setDescription('Channel that should receive reposts, if you want to set or change it')
+            .setRequired(false)
             .addChannelTypes(
               ChannelType.GuildText,
               ChannelType.GuildAnnouncement,
@@ -195,6 +200,12 @@ export const battleConditionsCommand: CommandModule = {
               ChannelType.AnnouncementThread,
               ChannelType.PrivateThread,
             )
+        )
+        .addBooleanOption(option =>
+          option
+            .setName(OPTION_ENABLE)
+            .setDescription('Whether reposting is enabled for the selected ranks (default: true)')
+            .setRequired(false)
         )
     )
     .toJSON(),
@@ -263,32 +274,69 @@ export const battleConditionsCommand: CommandModule = {
     }
 
     const rank = parseRankOrAllValue(interaction.options.getString(OPTION_RANK, true));
-    const selectedChannel = interaction.options.getChannel(OPTION_CHANNEL, true);
-    const channel = guild.channels.cache.get(selectedChannel.id) ?? await guild.channels.fetch(selectedChannel.id).catch(() => null);
+    const existingSubscription = await getBattleConditionsSubscription(interaction.guildId);
+    const enable = interaction.options.getBoolean(OPTION_ENABLE) ?? true;
+    const selectedChannel = interaction.options.getChannel(OPTION_CHANNEL, false);
+    const configuredRanks = getConfiguredRanks(rank);
+    const missingChannelRanks = enable
+      ? configuredRanks.filter(configuredRank => !selectedChannel && !existingSubscription?.channels[configuredRank])
+      : [];
 
-    if (!channel || !isAllowedBattleConditionsTargetChannelType(channel.type)) {
+    if (missingChannelRanks.length > 0) {
+      await interaction.reply({
+        content: `Select a channel for ${missingChannelRanks.map(configuredRank => getBattleConditionsRankConfig(configuredRank).label).join(', ')} before enabling reposts.`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const channel = selectedChannel
+      ? guild.channels.cache.get(selectedChannel.id) ?? await guild.channels.fetch(selectedChannel.id).catch(() => null)
+      : null;
+
+    if (selectedChannel && (!channel || !isAllowedBattleConditionsTargetChannelType(channel.type))) {
       await interaction.reply({ content: 'Select a text channel or thread in this server.', ephemeral: true });
       return;
     }
 
-    const requiredSendPermission = getBattleConditionsSendPermission(channel.type);
-    const userPermissions = channel.permissionsFor(interaction.user.id);
-    const botPermissions = guild.members.me ? channel.permissionsFor(guild.members.me) : null;
-    if (!userPermissions?.has(PermissionFlagsBits.ViewChannel) || !botPermissions?.has(PermissionFlagsBits.ViewChannel) || !botPermissions.has(requiredSendPermission)) {
-      await interaction.reply({ content: 'Both you and the bot must be able to access and post in that channel or thread.', ephemeral: true });
-      return;
+    if (channel) {
+      const requiredSendPermission = getBattleConditionsSendPermission(channel.type);
+      const userPermissions = channel.permissionsFor(interaction.user.id);
+      const botPermissions = guild.members.me ? channel.permissionsFor(guild.members.me) : null;
+      if (!userPermissions?.has(PermissionFlagsBits.ViewChannel) || !botPermissions?.has(PermissionFlagsBits.ViewChannel) || !botPermissions.has(requiredSendPermission)) {
+        await interaction.reply({ content: 'Both you and the bot must be able to access and post in that channel or thread.', ephemeral: true });
+        return;
+      }
     }
 
     await interaction.deferReply({ ephemeral: true });
 
-    const updated = await updateBattleConditionsSubscriptionChannels({
+    const updated = await updateBattleConditionsSubscriptionSettings({
       guildId: interaction.guildId,
       rank,
-      channelId: channel.id,
+      channelId: channel?.id,
+      enabled: enable,
     });
 
+    if (!enable) {
+      await interaction.editReply({
+        content: [
+          `Disabled battle condition reposts for ${rank === 'all' ? 'all ranks' : getBattleConditionsRankConfig(rank).label}.`,
+          '',
+          formatSubscriptionSummary(updated),
+        ].join('\n'),
+      });
+      return;
+    }
+
     const validationLines: string[] = [];
-    for (const configuredRank of getConfiguredRanks(rank)) {
+    for (const configuredRank of configuredRanks) {
+      const targetChannelId = updated.channels[configuredRank];
+      if (!targetChannelId) {
+        validationLines.push(`${getBattleConditionsRankConfig(configuredRank).label}: no repost channel is saved yet.`);
+        continue;
+      }
+
       const latestRecord = await getLatestBattleConditions(configuredRank);
       if (!latestRecord) {
         validationLines.push(`${getBattleConditionsRankConfig(configuredRank).label}: no stored battle conditions found to validate with yet.`);
@@ -298,7 +346,7 @@ export const battleConditionsCommand: CommandModule = {
       const validationResult = await sendBattleConditionsRecordToChannel(
         interaction.client as unknown as import('../core/tools-bot-client').ToolsBotClient,
         interaction.guildId,
-        channel.id,
+        targetChannelId,
         latestRecord,
       );
       validationLines.push(`${getBattleConditionsRankConfig(configuredRank).label}: ${formatValidationStatus(validationResult)}.`);
@@ -306,7 +354,7 @@ export const battleConditionsCommand: CommandModule = {
 
     await interaction.editReply({
       content: [
-        `Updated battle condition repost channels for ${rank === 'all' ? 'all ranks' : getBattleConditionsRankConfig(rank).label}.`,
+        `Updated battle condition repost settings for ${rank === 'all' ? 'all ranks' : getBattleConditionsRankConfig(rank).label}.`,
         '',
         formatSubscriptionSummary(updated),
         '',

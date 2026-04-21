@@ -16,6 +16,7 @@ import {
 import {
   getActiveBattleConditionsWindow,
   getConfiguredBattleConditionsRanks,
+  isBattleConditionsRankEnabled,
   isBattleConditionsRecordFreshForWindow,
 } from './battle-conditions-runtime';
 import { sendBattleConditionsRecordToChannel } from './battle-conditions-discord';
@@ -48,7 +49,7 @@ async function deliverRecords(client: ToolsBotClient, records: Partial<Record<Lo
       }
 
       const channelId = subscription.channels[rank];
-      if (!channelId) {
+      if (!channelId || !isBattleConditionsRankEnabled(subscription.channels, subscription.enabled, rank)) {
         continue;
       }
 
@@ -84,7 +85,7 @@ async function checkAndSend(client: ToolsBotClient): Promise<void> {
   }
 
   const subscriptions = await listBattleConditionsSubscriptions();
-  const configuredRanks = Array.from(new Set(subscriptions.flatMap(subscription => getConfiguredBattleConditionsRanks(subscription.channels))));
+  const configuredRanks = Array.from(new Set(subscriptions.flatMap(subscription => getConfiguredBattleConditionsRanks(subscription.channels, subscription.enabled))));
   if (configuredRanks.length === 0) {
     return;
   }

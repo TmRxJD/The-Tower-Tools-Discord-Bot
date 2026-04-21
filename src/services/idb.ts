@@ -93,6 +93,7 @@ export interface CloudSyncOutboxRecord {
 export interface BattleConditionsSubscriptionRecord {
   guildId: string;
   channels: BattleConditionsChannelMap;
+  enabled?: Partial<Record<'legends' | 'champ' | 'plat' | 'gold' | 'silver', boolean | undefined>>;
   deliveredTournamentDates: BattleConditionsDeliveredDates;
   updatedAt: number;
 }

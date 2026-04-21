@@ -20,7 +20,11 @@ import {
   saveAcronymProposal,
 } from '../services/acronym-registry';
 import type { AcronymProposalRecord } from '../services/idb';
-import { hasAcronymModerationPermission } from '../features/acronyms/acronym-permissions';
+import {
+  ACRONYM_REVIEW_GUILD_ID,
+  hasAcronymReviewGuildModerationPermission,
+  isAcronymReviewGuild,
+} from '../features/acronyms/acronym-permissions';
 import {
   createAcronymRequestApproveCustomId,
   createAcronymRequestDenyCustomId,
@@ -104,7 +108,8 @@ function buildHelpersRequestEmbed(input: {
   action: 'add' | 'remove';
   acronym: string;
   requesterId: string;
-  sourceChannelId: string;
+  sourceGuildName: string;
+  sourceChannelLabel: string;
   existingExpansion: string | null;
   nextExpansion: string | null;
 }): EmbedBuilder {
@@ -114,7 +119,8 @@ function buildHelpersRequestEmbed(input: {
     .setColor(COLOR_WARNING)
     .addFields(
       { name: 'Requested By', value: `<@${input.requesterId}>`, inline: true },
-      { name: 'Source Channel', value: `<#${input.sourceChannelId}>`, inline: true },
+      { name: 'Source Server', value: input.sourceGuildName, inline: true },
+      { name: 'Source Channel', value: input.sourceChannelLabel, inline: true },
       { name: 'Acronym', value: input.acronym, inline: true },
     )
     .setTimestamp();
@@ -251,12 +257,12 @@ export const acronymCommand: CommandModule = {
       return;
     }
 
-    const isModerator = hasAcronymModerationPermission(interaction.memberPermissions);
+    const canAutoApprove = await hasAcronymReviewGuildModerationPermission(interaction.client, interaction.user.id);
     const confirmCustomId = `${REVIEW_CONFIRM_PREFIX}${interaction.id}`;
     const cancelCustomId = `${REVIEW_CANCEL_PREFIX}${interaction.id}`;
 
     await interaction.reply({
-      embeds: [buildReviewEmbed({ ...preview, requiresApproval: !isModerator })],
+      embeds: [buildReviewEmbed({ ...preview, requiresApproval: !canAutoApprove })],
       components: [buildReviewActionRow(confirmCustomId, cancelCustomId)],
       ephemeral: true,
     });
@@ -274,7 +280,7 @@ export const acronymCommand: CommandModule = {
 
     await choice.deferUpdate();
 
-    if (isModerator) {
+    if (canAutoApprove) {
       await applyAcronymMutation({
         action,
         acronym: preview.acronym,
@@ -299,9 +305,9 @@ export const acronymCommand: CommandModule = {
     }
 
     const helpersChannel = await interaction.client.channels.fetch(helpersChannelId).catch(() => null);
-    if (!helpersChannel || !helpersChannel.isTextBased()) {
+    if (!helpersChannel || !helpersChannel.isTextBased() || !('guildId' in helpersChannel) || !isAcronymReviewGuild(helpersChannel.guildId)) {
       await interaction.editReply({
-        embeds: [buildStatusEmbed('Approval Unavailable', 'The configured helpers channel could not be used for this request.', COLOR_DANGER)],
+        embeds: [buildStatusEmbed('Approval Unavailable', `The configured helpers channel must be in the main acronym review server (${ACRONYM_REVIEW_GUILD_ID}).`, COLOR_DANGER)],
         components: [],
       });
       return;
@@ -314,7 +320,10 @@ export const acronymCommand: CommandModule = {
         action,
         acronym: preview.acronym,
         requesterId: interaction.user.id,
-        sourceChannelId: interaction.channelId,
+        sourceGuildName: interaction.guild?.name ?? interaction.guildId,
+        sourceChannelLabel: interaction.channel && 'name' in interaction.channel && typeof interaction.channel.name === 'string'
+          ? `#${interaction.channel.name}`
+          : `Channel ID: ${interaction.channelId}`,
         existingExpansion: preview.existingExpansion,
         nextExpansion: preview.nextExpansion,
       })],
@@ -338,7 +347,7 @@ export const acronymCommand: CommandModule = {
     await saveAcronymProposal(proposal);
 
     await interaction.editReply({
-      embeds: [buildSubmittedEmbed(getHelpersRequestUrl(interaction.guildId, helpersTextChannel.id, requestMessage.id))],
+      embeds: [buildSubmittedEmbed(getHelpersRequestUrl(helpersTextChannel.guildId, helpersTextChannel.id, requestMessage.id))],
       components: [],
     });
   },

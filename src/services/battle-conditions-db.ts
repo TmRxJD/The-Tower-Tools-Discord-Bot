@@ -1,7 +1,7 @@
 import {
+  battleConditionsChannelMapSchema,
   battleConditionsDeliveredDatesSchema,
   battleConditionsSchedulerStateSchema,
-  battleConditionsSubscriptionSchema,
   normalizeBattleConditionsChannelMap,
   normalizeBattleConditionsDeliveredDates,
 } from '@tmrxjd/platform/tools';
@@ -14,6 +14,7 @@ type LocalBattleConditionsRankOrAll = LocalBattleConditionsRank | 'all';
 type LocalBattleConditionsSubscription = {
   guildId: string;
   channels: Partial<Record<LocalBattleConditionsRank, string | undefined>>;
+  enabled: Partial<Record<LocalBattleConditionsRank, boolean | undefined>>;
   deliveredTournamentDates: Partial<Record<LocalBattleConditionsRank, string | undefined>>;
   updatedAt: number;
 };
@@ -25,58 +26,102 @@ type LocalBattleConditionsSchedulerState = {
   updatedAt: number;
 };
 
+function normalizeBattleConditionsEnabledMap(input: unknown): Partial<Record<LocalBattleConditionsRank, boolean | undefined>> {
+  const typedInput = (input && typeof input === 'object') ? input as Record<string, unknown> : {};
+  return {
+    legends: typeof typedInput.legends === 'boolean' ? typedInput.legends : undefined,
+    champ: typeof typedInput.champ === 'boolean' ? typedInput.champ : undefined,
+    plat: typeof typedInput.plat === 'boolean' ? typedInput.plat : undefined,
+    gold: typeof typedInput.gold === 'boolean' ? typedInput.gold : undefined,
+    silver: typeof typedInput.silver === 'boolean' ? typedInput.silver : undefined,
+  };
+}
+
 export async function getBattleConditionsSubscription(guildId: string): Promise<LocalBattleConditionsSubscription | null> {
   const row = await getToolsBotDb().battleConditionsSubscriptions.get(guildId);
   if (!row) {
     return null;
   }
 
-  return battleConditionsSubscriptionSchema.parse({
+  return {
     guildId: row.guildId,
     channels: normalizeBattleConditionsChannelMap(row.channels),
+    enabled: normalizeBattleConditionsEnabledMap(row.enabled),
     deliveredTournamentDates: normalizeBattleConditionsDeliveredDates(row.deliveredTournamentDates),
     updatedAt: row.updatedAt,
-  });
+  };
 }
 
 export async function listBattleConditionsSubscriptions(): Promise<LocalBattleConditionsSubscription[]> {
   const rows = await getToolsBotDb().battleConditionsSubscriptions.toArray();
-  return rows.map(row => battleConditionsSubscriptionSchema.parse({
-    guildId: row.guildId,
-    channels: normalizeBattleConditionsChannelMap(row.channels),
-    deliveredTournamentDates: normalizeBattleConditionsDeliveredDates(row.deliveredTournamentDates),
-    updatedAt: row.updatedAt,
-  }));
+  return rows.map(row => {
+    battleConditionsChannelMapSchema.parse(normalizeBattleConditionsChannelMap(row.channels));
+    battleConditionsDeliveredDatesSchema.parse(normalizeBattleConditionsDeliveredDates(row.deliveredTournamentDates));
+    return {
+      guildId: row.guildId,
+      channels: normalizeBattleConditionsChannelMap(row.channels),
+      enabled: normalizeBattleConditionsEnabledMap(row.enabled),
+      deliveredTournamentDates: normalizeBattleConditionsDeliveredDates(row.deliveredTournamentDates),
+      updatedAt: row.updatedAt,
+    };
+  });
 }
 
 export async function saveBattleConditionsSubscription(subscription: LocalBattleConditionsSubscription): Promise<LocalBattleConditionsSubscription> {
-  const parsed = battleConditionsSubscriptionSchema.parse(subscription);
+  const parsed = {
+    guildId: String(subscription.guildId),
+    channels: normalizeBattleConditionsChannelMap(subscription.channels),
+    enabled: normalizeBattleConditionsEnabledMap(subscription.enabled),
+    deliveredTournamentDates: normalizeBattleConditionsDeliveredDates(subscription.deliveredTournamentDates),
+    updatedAt: subscription.updatedAt,
+  };
+  battleConditionsChannelMapSchema.parse(parsed.channels);
+  battleConditionsDeliveredDatesSchema.parse(parsed.deliveredTournamentDates);
+  if (!parsed.guildId.trim()) {
+    throw new Error('Battle conditions subscription guildId is required.');
+  }
+  if (!Number.isInteger(parsed.updatedAt) || parsed.updatedAt < 0) {
+    throw new Error('Battle conditions subscription updatedAt must be a non-negative integer.');
+  }
   await getToolsBotDb().battleConditionsSubscriptions.put(parsed);
   return parsed as LocalBattleConditionsSubscription;
 }
 
-export async function updateBattleConditionsSubscriptionChannels(input: {
+export async function updateBattleConditionsSubscriptionSettings(input: {
   guildId: string;
   rank: LocalBattleConditionsRankOrAll;
-  channelId: string;
+  channelId?: string;
+  enabled: boolean;
 }): Promise<LocalBattleConditionsSubscription> {
   const existing = await getBattleConditionsSubscription(input.guildId);
   const channels = normalizeBattleConditionsChannelMap(existing?.channels);
+  const enabled = normalizeBattleConditionsEnabledMap(existing?.enabled);
   const deliveredTournamentDates = battleConditionsDeliveredDatesSchema.parse(existing?.deliveredTournamentDates ?? {});
 
   if (input.rank === 'all') {
-    channels.legends = input.channelId;
-    channels.champ = input.channelId;
-    channels.plat = input.channelId;
-    channels.gold = input.channelId;
-    channels.silver = input.channelId;
+    if (input.channelId !== undefined) {
+      channels.legends = input.channelId;
+      channels.champ = input.channelId;
+      channels.plat = input.channelId;
+      channels.gold = input.channelId;
+      channels.silver = input.channelId;
+    }
+    enabled.legends = input.enabled;
+    enabled.champ = input.enabled;
+    enabled.plat = input.enabled;
+    enabled.gold = input.enabled;
+    enabled.silver = input.enabled;
   } else {
-    channels[input.rank] = input.channelId;
+    if (input.channelId !== undefined) {
+      channels[input.rank] = input.channelId;
+    }
+    enabled[input.rank] = input.enabled;
   }
 
   return saveBattleConditionsSubscription({
     guildId: input.guildId,
     channels,
+    enabled,
     deliveredTournamentDates,
     updatedAt: Date.now(),
   });

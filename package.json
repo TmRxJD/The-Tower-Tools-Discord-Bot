@@ -52,7 +52,6 @@
     "register:commands": "pnpm run register:commands:dev",
     "register:commands:dev": "cross-env DEPLOYMENT_MODE=dev NODE_ENV=development BOT_LOG_LEVEL=error ts-node src/scripts/register-commands.ts --mode=dev",
     "register:commands:prod": "cross-env DEPLOYMENT_MODE=prod NODE_ENV=production BOT_LOG_LEVEL=error ts-node src/scripts/register-commands.ts --mode=prod",
-    "register:commands:prod:global": "cross-env DEPLOYMENT_MODE=prod NODE_ENV=production BOT_LOG_LEVEL=error ts-node src/scripts/register-commands.ts --mode=prod --global",
     "register:commands:clear:global": "cross-env DEPLOYMENT_MODE=prod NODE_ENV=production BOT_LOG_LEVEL=error ts-node src/scripts/delete-global-commands.ts"
   },
   "dependencies": {

@@ -1,17 +1,15 @@
-import { REST, Routes } from 'discord.js';
+import { Client, GatewayIntentBits, REST, Routes } from 'discord.js';
 import { getAppConfig, loadConfig } from '../config';
 import { validateBotBootstrapConfig } from '../core/bootstrap-contract';
 import { logger } from '../core/logger';
 
 type RegisterCommandOptions = {
   deploymentMode?: 'dev' | 'prod';
-  forceGlobal: boolean;
   guildId?: string;
 };
 
 function parseRegisterCommandOptions(argv: string[]): RegisterCommandOptions {
   const options: RegisterCommandOptions = {
-    forceGlobal: false,
   };
 
   for (const arg of argv) {
@@ -22,11 +20,6 @@ function parseRegisterCommandOptions(argv: string[]): RegisterCommandOptions {
 
     if (arg === '--dev') {
       options.deploymentMode = 'dev';
-      continue;
-    }
-
-    if (arg === '--global') {
-      options.forceGlobal = true;
       continue;
     }
 
@@ -62,39 +55,38 @@ async function registerCommands() {
 
   const rest = new REST({ version: '10' }).setToken(runtime.loginToken);
   const body = commandModules.map(command => command.data);
-  const targetGuildId = resolveTargetGuildId(runtime.deploymentMode, options, runtime.registrationGuildId);
+  const targetGuildIds = await resolveTargetGuildIds(runtime.loginToken, options.guildId);
 
   logger.info(`Preparing command registration for ${runtime.deploymentMode} mode`);
 
-  if (targetGuildId) {
-    logger.info(`Registering ${body.length} guild commands to ${targetGuildId}`);
-    await rest.put(Routes.applicationGuildCommands(runtime.clientId, targetGuildId), { body });
-  } else {
-    logger.info(`Registering ${body.length} global commands`);
-    await rest.put(Routes.applicationCommands(runtime.clientId), { body });
+  logger.info('Clearing global commands to avoid duplicate guild/global command entries');
+  await rest.put(Routes.applicationCommands(runtime.clientId), { body: [] });
+
+  for (const guildId of targetGuildIds) {
+    logger.info(`Registering ${body.length} guild commands to ${guildId}`);
+    await rest.put(Routes.applicationGuildCommands(runtime.clientId, guildId), { body });
   }
 
-  logger.info('Slash commands refreshed');
+  logger.info(`Slash commands refreshed across ${targetGuildIds.length} guild(s)`);
 }
 
-function resolveTargetGuildId(
-  deploymentMode: 'dev' | 'prod',
-  options: RegisterCommandOptions,
-  configuredGuildId?: string,
-): string | undefined {
-  if (options.forceGlobal) {
-    return undefined;
+async function resolveTargetGuildIds(loginToken: string, explicitGuildId?: string): Promise<string[]> {
+  if (explicitGuildId) {
+    return [explicitGuildId];
   }
 
-  if (options.guildId) {
-    return options.guildId;
+  const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+  try {
+    await client.login(loginToken);
+    const guilds = await client.guilds.fetch();
+    const guildIds = [...guilds.keys()].sort((left, right) => left.localeCompare(right));
+    if (guildIds.length === 0) {
+      throw new Error('The bot is not currently in any guilds, so there are no commands to register.');
+    }
+    return guildIds;
+  } finally {
+    client.destroy();
   }
-
-  if (deploymentMode === 'dev') {
-    return configuredGuildId;
-  }
-
-  return undefined;
 }
 
 void registerCommands().catch(error => {

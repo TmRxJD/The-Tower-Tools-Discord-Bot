@@ -6,6 +6,7 @@ import type { BattleConditionsRecord } from './battle-conditions-cloud';
 
 const SLOT_OPEN_MINUTE_UTC = 1;
 type LocalBattleConditionsRank = 'legends' | 'champ' | 'plat' | 'gold' | 'silver';
+type LocalBattleConditionsEnabledMap = Partial<Record<LocalBattleConditionsRank, boolean | undefined>>;
 
 export interface BattleConditionsWindow {
   windowKey: string;
@@ -50,8 +51,23 @@ export function getActiveBattleConditionsWindow(now = Date.now()): BattleConditi
   };
 }
 
-export function getConfiguredBattleConditionsRanks(channels: Partial<Record<LocalBattleConditionsRank, string | undefined>>): LocalBattleConditionsRank[] {
-  return (battleConditionsRankOrder as LocalBattleConditionsRank[]).filter(rank => Boolean(channels[rank]));
+export function isBattleConditionsRankEnabled(
+  channels: Partial<Record<LocalBattleConditionsRank, string | undefined>>,
+  enabled: LocalBattleConditionsEnabledMap,
+  rank: LocalBattleConditionsRank,
+): boolean {
+  if (!channels[rank]) {
+    return false;
+  }
+
+  return enabled[rank] !== false;
+}
+
+export function getConfiguredBattleConditionsRanks(
+  channels: Partial<Record<LocalBattleConditionsRank, string | undefined>>,
+  enabled: LocalBattleConditionsEnabledMap,
+): LocalBattleConditionsRank[] {
+  return (battleConditionsRankOrder as LocalBattleConditionsRank[]).filter(rank => isBattleConditionsRankEnabled(channels, enabled, rank));
 }
 
 export function isBattleConditionsRecordFreshForWindow(record: BattleConditionsRecord | null, window: BattleConditionsWindow): boolean {

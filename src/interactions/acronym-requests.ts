@@ -6,7 +6,12 @@ import {
   MessageFlags,
 } from 'discord.js';
 import type { ToolsBotClient } from '../core/tools-bot-client';
-import { hasAcronymModerationPermission } from '../features/acronyms/acronym-permissions';
+import {
+  ACRONYM_REVIEW_GUILD_ID,
+  hasAcronymModerationPermission,
+  hasAcronymReviewGuildModerationPermission,
+  isAcronymReviewGuild,
+} from '../features/acronyms/acronym-permissions';
 import {
   ACRONYM_REQUEST_APPROVE_PREFIX,
   ACRONYM_REQUEST_DENY_PREFIX,
@@ -34,8 +39,6 @@ function buildDisabledActionRow(proposalId: string, approved: boolean): ActionRo
       .setDisabled(true),
     new ButtonBuilder()
       .setCustomId(createAcronymRequestDenyCustomId(proposalId))
-      .setLabel(approved ? 'Deny' : 'Denied')
-      .setStyle(ButtonStyle.Danger)
       .setDisabled(true),
   );
 }
@@ -58,8 +61,13 @@ async function handleResolution(interaction: Parameters<ToolsBotClient['componen
     return;
   }
 
-  if (!hasAcronymModerationPermission(interaction.memberPermissions)) {
-    await interaction.reply({ content: 'You do not have permission to approve acronym requests.', ephemeral: true });
+  if (!isAcronymReviewGuild(interaction.guildId)) {
+    await interaction.reply({ content: `Acronym requests can only be reviewed in the main server (${ACRONYM_REVIEW_GUILD_ID}).`, ephemeral: true });
+    return;
+  }
+
+  if (!hasAcronymModerationPermission(interaction.memberPermissions) || !await hasAcronymReviewGuildModerationPermission(interaction.client, interaction.user.id)) {
+    await interaction.reply({ content: 'Only moderators of the main server can approve acronym requests.', ephemeral: true });
     return;
   }
 
