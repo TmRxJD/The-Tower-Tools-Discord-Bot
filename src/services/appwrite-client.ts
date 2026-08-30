@@ -1,5 +1,5 @@
 import { Client, Databases, Storage } from 'node-appwrite';
-import { createAppwriteClientBundle, resolveAppwriteCredential } from '@tmrxjd/platform/node';
+import { buildAppwriteClientBundle, resolveAppwriteCredential } from '@tmrxjd/platform/node';
 import { getAppConfig } from '../config';
 import { logger } from '../core/logger';
 
@@ -38,7 +38,7 @@ export function getAppwriteClient(): AppwriteClientBundle | null {
     return null;
   }
 
-  const bundle = createAppwriteClientBundle({
+  const bundle = buildAppwriteClientBundle({
     client: new Client(),
     endpoint: cfg.appwrite.endpoint,
     projectId: cfg.appwrite.projectId,

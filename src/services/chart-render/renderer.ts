@@ -1,6 +1,6 @@
 import {
   buildChartStudioPreviewDocument,
-  createChartRenderRequest,
+  buildChartRenderRequest,
   type SharedChartPath,
 } from '@tmrxjd/platform/tools'
 import {
@@ -18,7 +18,7 @@ export async function renderChartAttachment(
   discordUserId?: string,
   options?: { selectedStats?: string[] },
 ): Promise<ChartRenderResult> {
-  const renderRequest = createChartRenderRequest(path)
+  const renderRequest = buildChartRenderRequest(path)
   if (!renderRequest) return { status: 'unavailable' }
 
   try {

@@ -41,6 +41,9 @@ export interface AppConfig {
     trackerAiKbMetadataFileId?: string;
     trackerAiKbChunksFileId?: string;
     trackerAiKbIndexFileId?: string;
+    giveawayDatabaseId: string;
+    giveawaysCollectionId: string;
+    giveawayEntriesCollectionId: string;
   } | null;
 }
 
@@ -78,6 +81,9 @@ const envSchema = z.object({
   TRACKERAI_KB_METADATA_FILE_ID: z.string().min(1).optional(),
   TRACKERAI_KB_CHUNKS_FILE_ID: z.string().min(1).optional(),
   TRACKERAI_KB_INDEX_FILE_ID: z.string().min(1).optional(),
+  APPWRITE_GIVEAWAY_DATABASE_ID: z.string().min(1).optional(),
+  APPWRITE_GIVEAWAYS_COLLECTION_ID: z.string().min(1).optional(),
+  APPWRITE_GIVEAWAY_ENTRIES_COLLECTION_ID: z.string().min(1).optional(),
 });
 
 let cachedConfig: AppConfig | null = null;
@@ -236,6 +242,9 @@ export function loadConfig(): AppConfig {
           trackerAiKbMetadataFileId: firstNonEmpty(parsed.TRACKERAI_KB_METADATA_FILE_ID) ?? 'trackerai-kb-metadata',
           trackerAiKbChunksFileId: firstNonEmpty(parsed.TRACKERAI_KB_CHUNKS_FILE_ID) ?? 'trackerai-kb-chunks',
           trackerAiKbIndexFileId: firstNonEmpty(parsed.TRACKERAI_KB_INDEX_FILE_ID) ?? 'trackerai-kb-index',
+          giveawayDatabaseId: parsed.APPWRITE_GIVEAWAY_DATABASE_ID ?? 'tower-mod-bot',
+          giveawaysCollectionId: parsed.APPWRITE_GIVEAWAYS_COLLECTION_ID ?? 'giveaways',
+          giveawayEntriesCollectionId: parsed.APPWRITE_GIVEAWAY_ENTRIES_COLLECTION_ID ?? 'giveaway_entries',
         }
       : null,
   };

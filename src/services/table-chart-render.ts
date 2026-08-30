@@ -1,6 +1,6 @@
 import { createCanvas } from '@napi-rs/canvas'
 import {
-  createNapiRsCanvasChartRenderRuntime,
+  buildNapiRsCanvasChartRenderRuntime,
   defaultSharedUserToolSettings,
   getConfigurableTableHeaderRowIndex,
   renderConfiguredTableChartPng,
@@ -14,7 +14,7 @@ import {
 } from '@tmrxjd/platform/tools'
 import { getUserSharedSettings, type LocalSharedUserToolSettings } from './user-shared-settings-db'
 
-const runtime = createNapiRsCanvasChartRenderRuntime((width, height) => createCanvas(width, height))
+const runtime = buildNapiRsCanvasChartRenderRuntime((width, height) => createCanvas(width, height))
 
 async function resolveChartSettings(discordUserId?: string): Promise<LocalSharedUserToolSettings> {
   if (!discordUserId) {

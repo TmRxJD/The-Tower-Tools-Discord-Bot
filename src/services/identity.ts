@@ -1,15 +1,16 @@
-import {
-  hasCanonicalAppwriteIdentity as hasCanonicalAppwriteIdentityBase,
-  parseDiscordToAppwriteMapFromEnv,
-  resolveCanonicalAppwriteUserId as resolveCanonicalAppwriteUserIdBase,
-} from '@tmrxjd/platform/tools'
+import { getCachedAppwriteUserIdForDiscord } from './discord-identity-resolver'
 
-const DISCORD_TO_APPWRITE_MAP = parseDiscordToAppwriteMapFromEnv(process.env)
-
+/**
+ * Map-free canonical identity.
+ *
+ * The old env-map (`DISCORD_TO_APPWRITE_MAP`) is gone. Discord->Appwrite ids are
+ * now resolved at runtime from Appwrite's OAuth identity records by
+ * `resolveAppwriteUserIdForDiscord`, which the interaction entrypoints
+ * (`core/interaction-router`, `core/command-pipeline`) call once per interaction
+ * and cache. This synchronous accessor reads that cache for downstream service
+ * code; a miss returns null, and every caller already treats null as "use the raw
+ * Discord id".
+ */
 export function resolveCanonicalAppwriteUserId(discordUserId: string): string | null {
-  return resolveCanonicalAppwriteUserIdBase(discordUserId, DISCORD_TO_APPWRITE_MAP)
-}
-
-export function hasCanonicalAppwriteIdentity(discordUserId: string): boolean {
-  return hasCanonicalAppwriteIdentityBase(discordUserId, DISCORD_TO_APPWRITE_MAP)
+  return getCachedAppwriteUserIdForDiscord(discordUserId)
 }

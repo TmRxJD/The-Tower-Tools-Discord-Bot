@@ -1,12 +1,9 @@
 import {
   buildSyncedStateReconcileResult,
-  computeCloudStateDirection,
   defaultSharedUserToolSettings,
-  governedDateFormatPreferenceIds,
-  governedDecimalSeparatorPreferenceIds,
-  governedLanguagePreferenceIds,
   normalizeSharedUserToolSettings,
   sharedUserToolSettingsSchema,
+  type SharedUserToolSettings,
 } from '@tmrxjd/platform/tools'
 import { getToolsBotDb } from './idb'
 import { logger } from '../core/logger'
@@ -16,18 +13,7 @@ import { resolveCanonicalAppwriteUserId } from './identity'
 
 const SHARED_SETTINGS_SCOPE = 'shared-settings'
 
-type LocalLanguagePreference = (typeof governedLanguagePreferenceIds)[number]
-type LocalDateFormatPreference = (typeof governedDateFormatPreferenceIds)[number]
-type LocalDecimalSeparatorPreference = (typeof governedDecimalSeparatorPreferenceIds)[number]
-
-export type LocalSharedUserToolSettings = {
-  cloudSyncEnabled: boolean
-  chartPalettePreset: 'default' | 'accent-warning' | 'accent-success'
-  chartDataAlignment: 'left' | 'center' | 'right'
-  languagePreference: LocalLanguagePreference
-  dateFormatPreference: LocalDateFormatPreference
-  decimalSeparatorPreference: LocalDecimalSeparatorPreference
-}
+export type LocalSharedUserToolSettings = SharedUserToolSettings
 
 export type SharedSettingsReconcileResult = {
   autoCloudEnabled: boolean
@@ -41,7 +27,7 @@ export type SharedSettingsReconcileResult = {
   applyLocalToCloud: () => Promise<void>
 }
 
-async function loadLocalSharedSettings(userId: string): Promise<{ state: LocalSharedUserToolSettings; updatedAt: number | null }> {
+async function loadLocalSharedSettingsLegacySqlite(userId: string): Promise<{ state: LocalSharedUserToolSettings; updatedAt: number | null }> {
   const database = getToolsBotDb()
   const row = await database.sharedUserSettings.get(userId)
   const local = row
@@ -49,6 +35,11 @@ async function loadLocalSharedSettings(userId: string): Promise<{ state: LocalSh
         cloudSyncEnabled: Boolean(row.cloudSyncEnabled),
         chartPalettePreset: row.chartPalettePreset,
         chartDataAlignment: row.chartDataAlignment,
+        languagePreference: row.languagePreference,
+        dateFormatPreference: row.dateFormatPreference,
+        decimalSeparatorPreference: row.decimalSeparatorPreference,
+        runDeltaMode: row.runDeltaMode,
+        useSharedToolInputs: row.useSharedToolInputs,
       })
     : { ...defaultSharedUserToolSettings }
 
@@ -58,16 +49,43 @@ async function loadLocalSharedSettings(userId: string): Promise<{ state: LocalSh
   }
 }
 
-async function saveLocalSharedSettings(userId: string, settings: LocalSharedUserToolSettings): Promise<void> {
+async function saveLocalSharedSettingsLegacySqlite(userId: string, settings: LocalSharedUserToolSettings): Promise<void> {
   const normalized = normalizeSharedUserToolSettings(settings)
   const database = getToolsBotDb()
   await database.sharedUserSettings.put({
     userId,
     cloudSyncEnabled: normalized.cloudSyncEnabled ? 1 : 0,
+    useSharedToolInputs: normalized.useSharedToolInputs ? 1 : 0,
     chartPalettePreset: normalized.chartPalettePreset,
     chartDataAlignment: normalized.chartDataAlignment,
+    languagePreference: normalized.languagePreference,
+    dateFormatPreference: normalized.dateFormatPreference,
+    decimalSeparatorPreference: normalized.decimalSeparatorPreference,
+    runDeltaMode: normalized.runDeltaMode,
     updatedAt: Date.now(),
   })
+}
+
+async function loadLocalSharedSettings(userId: string): Promise<{ state: LocalSharedUserToolSettings; updatedAt: number | null }> {
+  try {
+    const { loadSharedSettingsFromRxDB } = await import('../rxdb/user-state-rxdb-store.js')
+    return await loadSharedSettingsFromRxDB(userId)
+  } catch (error) {
+    logger.warn('[shared-settings] RxDB read failed; falling back to legacy sqlite', { userId, error })
+    return loadLocalSharedSettingsLegacySqlite(userId)
+  }
+}
+
+async function saveLocalSharedSettings(userId: string, settings: LocalSharedUserToolSettings): Promise<void> {
+  try {
+    const { saveSharedSettingsToRxDB } = await import('../rxdb/user-state-rxdb-store.js')
+    await saveSharedSettingsToRxDB(userId, settings)
+    return
+  } catch (error) {
+    logger.warn('[shared-settings] RxDB write failed; falling back to legacy sqlite', { userId, error })
+  }
+
+  await saveLocalSharedSettingsLegacySqlite(userId, settings)
 }
 
 export async function getUserSharedSettings(userId: string): Promise<LocalSharedUserToolSettings> {
@@ -82,11 +100,13 @@ export async function getUserSharedSettings(userId: string): Promise<LocalShared
 
 function hasMeaningfulSharedSettings(candidate: LocalSharedUserToolSettings): boolean {
   return candidate.cloudSyncEnabled !== defaultSharedUserToolSettings.cloudSyncEnabled
+    || candidate.useSharedToolInputs !== defaultSharedUserToolSettings.useSharedToolInputs
     || candidate.chartPalettePreset !== defaultSharedUserToolSettings.chartPalettePreset
     || candidate.chartDataAlignment !== defaultSharedUserToolSettings.chartDataAlignment
     || candidate.languagePreference !== defaultSharedUserToolSettings.languagePreference
     || candidate.dateFormatPreference !== defaultSharedUserToolSettings.dateFormatPreference
     || candidate.decimalSeparatorPreference !== defaultSharedUserToolSettings.decimalSeparatorPreference
+    || candidate.runDeltaMode !== defaultSharedUserToolSettings.runDeltaMode
 }
 
 export async function getEffectiveUserSharedSettings(discordUserId: string): Promise<LocalSharedUserToolSettings> {

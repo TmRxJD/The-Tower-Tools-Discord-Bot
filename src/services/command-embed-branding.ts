@@ -12,6 +12,7 @@ const COMMAND_ROUTE_MAP: Record<string, string> = {
   stone: '/calculators/uw',
   thorns: '/calculators/thorns',
   workshop: '/calculators/workshop',
+  enemy_stats: '/calculators/enemy-stats',
 }
 
 function getSiteBaseUrl(): string {

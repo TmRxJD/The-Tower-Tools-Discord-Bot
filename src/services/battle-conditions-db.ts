@@ -1,9 +1,11 @@
 import {
   battleConditionsChannelMapSchema,
   battleConditionsDeliveredDatesSchema,
+  battleConditionsDeliveredUpdatedAtSchema,
   battleConditionsSchedulerStateSchema,
   normalizeBattleConditionsChannelMap,
   normalizeBattleConditionsDeliveredDates,
+  normalizeBattleConditionsDeliveredUpdatedAt,
 } from '@tmrxjd/platform/tools';
 import { getToolsBotDb } from './idb';
 
@@ -16,6 +18,7 @@ type LocalBattleConditionsSubscription = {
   channels: Partial<Record<LocalBattleConditionsRank, string | undefined>>;
   enabled: Partial<Record<LocalBattleConditionsRank, boolean | undefined>>;
   deliveredTournamentDates: Partial<Record<LocalBattleConditionsRank, string | undefined>>;
+  deliveredSourceUpdatedAt: Partial<Record<LocalBattleConditionsRank, number | undefined>>;
   updatedAt: number;
 };
 type LocalBattleConditionsSchedulerState = {
@@ -48,6 +51,7 @@ export async function getBattleConditionsSubscription(guildId: string): Promise<
     channels: normalizeBattleConditionsChannelMap(row.channels),
     enabled: normalizeBattleConditionsEnabledMap(row.enabled),
     deliveredTournamentDates: normalizeBattleConditionsDeliveredDates(row.deliveredTournamentDates),
+    deliveredSourceUpdatedAt: normalizeBattleConditionsDeliveredUpdatedAt(row.deliveredSourceUpdatedAt),
     updatedAt: row.updatedAt,
   };
 }
@@ -57,11 +61,13 @@ export async function listBattleConditionsSubscriptions(): Promise<LocalBattleCo
   return rows.map(row => {
     battleConditionsChannelMapSchema.parse(normalizeBattleConditionsChannelMap(row.channels));
     battleConditionsDeliveredDatesSchema.parse(normalizeBattleConditionsDeliveredDates(row.deliveredTournamentDates));
+    battleConditionsDeliveredUpdatedAtSchema.parse(normalizeBattleConditionsDeliveredUpdatedAt(row.deliveredSourceUpdatedAt));
     return {
       guildId: row.guildId,
       channels: normalizeBattleConditionsChannelMap(row.channels),
       enabled: normalizeBattleConditionsEnabledMap(row.enabled),
       deliveredTournamentDates: normalizeBattleConditionsDeliveredDates(row.deliveredTournamentDates),
+      deliveredSourceUpdatedAt: normalizeBattleConditionsDeliveredUpdatedAt(row.deliveredSourceUpdatedAt),
       updatedAt: row.updatedAt,
     };
   });
@@ -73,10 +79,12 @@ export async function saveBattleConditionsSubscription(subscription: LocalBattle
     channels: normalizeBattleConditionsChannelMap(subscription.channels),
     enabled: normalizeBattleConditionsEnabledMap(subscription.enabled),
     deliveredTournamentDates: normalizeBattleConditionsDeliveredDates(subscription.deliveredTournamentDates),
+    deliveredSourceUpdatedAt: normalizeBattleConditionsDeliveredUpdatedAt(subscription.deliveredSourceUpdatedAt),
     updatedAt: subscription.updatedAt,
   };
   battleConditionsChannelMapSchema.parse(parsed.channels);
   battleConditionsDeliveredDatesSchema.parse(parsed.deliveredTournamentDates);
+  battleConditionsDeliveredUpdatedAtSchema.parse(parsed.deliveredSourceUpdatedAt);
   if (!parsed.guildId.trim()) {
     throw new Error('Battle conditions subscription guildId is required.');
   }
@@ -97,6 +105,7 @@ export async function updateBattleConditionsSubscriptionSettings(input: {
   const channels = normalizeBattleConditionsChannelMap(existing?.channels);
   const enabled = normalizeBattleConditionsEnabledMap(existing?.enabled);
   const deliveredTournamentDates = battleConditionsDeliveredDatesSchema.parse(existing?.deliveredTournamentDates ?? {});
+  const deliveredSourceUpdatedAt = battleConditionsDeliveredUpdatedAtSchema.parse(existing?.deliveredSourceUpdatedAt ?? {});
 
   if (input.rank === 'all') {
     if (input.channelId !== undefined) {
@@ -123,6 +132,7 @@ export async function updateBattleConditionsSubscriptionSettings(input: {
     channels,
     enabled,
     deliveredTournamentDates,
+    deliveredSourceUpdatedAt,
     updatedAt: Date.now(),
   });
 }
@@ -131,6 +141,7 @@ export async function markBattleConditionsDelivered(input: {
   guildId: string;
   rank: LocalBattleConditionsRank;
   tournamentDate: string;
+  sourceMessageUpdatedAt: number;
 }): Promise<void> {
   const existing = await getBattleConditionsSubscription(input.guildId);
   if (!existing) {
@@ -138,10 +149,13 @@ export async function markBattleConditionsDelivered(input: {
   }
 
   const deliveredTournamentDates = normalizeBattleConditionsDeliveredDates(existing.deliveredTournamentDates);
+  const deliveredSourceUpdatedAt = normalizeBattleConditionsDeliveredUpdatedAt(existing.deliveredSourceUpdatedAt);
   deliveredTournamentDates[input.rank] = input.tournamentDate;
+  deliveredSourceUpdatedAt[input.rank] = input.sourceMessageUpdatedAt;
   await saveBattleConditionsSubscription({
     ...existing,
     deliveredTournamentDates,
+    deliveredSourceUpdatedAt,
     updatedAt: Date.now(),
   });
 }

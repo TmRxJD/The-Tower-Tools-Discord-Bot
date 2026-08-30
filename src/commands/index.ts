@@ -28,6 +28,8 @@ import { settingsCommand } from './settings';
 import { shardSplitterCommand } from './shard-splitter';
 import { guardianCommand } from './guardian';
 import { battleConditionsCommand } from './battle-conditions';
+import { giveawayCommand } from './giveaway';
+import { enemyStatsCommand } from './enemy-stats';
 
 export const commandModules: CommandModule[] = [
   askCommand,
@@ -59,4 +61,6 @@ export const commandModules: CommandModule[] = [
   shardSplitterCommand,
   guardianCommand,
   battleConditionsCommand,
+  giveawayCommand,
+  enemyStatsCommand,
 ];

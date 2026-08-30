@@ -16,7 +16,7 @@ import { mutateCloudJsonBlobDocument, resolveDocumentByCandidates } from '@tmrxj
 import { syncCloudOutboxState } from './cloud-sync-outbox';
 import { getEffectiveUserSharedSettings } from './user-shared-settings-db';
 
-export type SharedCommandStateKey = 'bots' | 'module' | 'workshop' | 'stone' | 'chart' | 'thorns' | 'guardian';
+export type SharedCommandStateKey = 'bots' | 'module' | 'workshop' | 'stone' | 'chart' | 'thorns' | 'guardian' | 'enemyStats';
 
 type CollectionRoute = {
   primary: string;
@@ -78,7 +78,7 @@ function getCollectionRoute(cfg: NonNullable<ReturnType<typeof getAppConfig>['ap
     };
   }
 
-  if (key === 'guardian' || key === 'module') {
+  if (key === 'guardian' || key === 'module' || key === 'enemyStats') {
     return {
       primary: cfg.modulesCollectionId,
     };
@@ -316,6 +316,20 @@ export async function reconcileUserCommandSharedState<T extends object>(
       });
     },
   });
+}
+
+export async function sendCommandSharedCloudOutboxPayload(
+  userId: string,
+  scope: string,
+  payload: Record<string, unknown>,
+): Promise<boolean> {
+  const match = /^command-shared:(.+)$/.exec(scope);
+  if (!match) {
+    return false;
+  }
+
+  const key = match[1] as SharedCommandStateKey;
+  return saveCloudCommandState(userId, key, payload);
 }
 
 export async function saveUserCommandSharedState<T extends object>(

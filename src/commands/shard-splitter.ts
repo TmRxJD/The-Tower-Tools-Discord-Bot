@@ -12,7 +12,7 @@ import {
   type APIEmbedField,
 } from 'discord.js';
 import {
-  createDefaultShardSplitterSnapshot,
+  buildDefaultShardSplitterSnapshot,
   computeShardSplitResult,
   type ConfigurableCell,
   type ConfigurableTableDocument,
@@ -206,7 +206,7 @@ const data = new SlashCommandBuilder()
 export const shardSplitterCommand = createChatInputCommand(data, async interaction => {
   const discordUserId = interaction.user.id;
   const hasMeaningfulShardState = (candidate: Awaited<ReturnType<typeof getUserShardSplitterState>>): boolean => {
-    const defaults = createDefaultShardSplitterSnapshot();
+    const defaults = buildDefaultShardSplitterSnapshot();
     return JSON.stringify(candidate.snapshot) !== JSON.stringify(defaults);
   };
 

@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import type {
   BattleConditionsChannelMap,
   BattleConditionsDeliveredDates,
+  BattleConditionsDeliveredUpdatedAt,
 } from '@tmrxjd/platform/tools';
 import sqlite3 from 'sqlite3';
 import { logger } from '../core/logger';
@@ -64,8 +65,13 @@ export interface LabSettingsRecord {
 export interface SharedUserSettingsRecord {
   userId: string;
   cloudSyncEnabled: number;
+  useSharedToolInputs?: number;
   chartPalettePreset: string;
   chartDataAlignment: string;
+  languagePreference?: string;
+  dateFormatPreference?: string;
+  decimalSeparatorPreference?: string;
+  runDeltaMode?: string;
   updatedAt: number;
 }
 
@@ -95,6 +101,7 @@ export interface BattleConditionsSubscriptionRecord {
   channels: BattleConditionsChannelMap;
   enabled?: Partial<Record<'legends' | 'champ' | 'plat' | 'gold' | 'silver', boolean | undefined>>;
   deliveredTournamentDates: BattleConditionsDeliveredDates;
+  deliveredSourceUpdatedAt?: BattleConditionsDeliveredUpdatedAt;
   updatedAt: number;
 }
 
@@ -383,4 +390,14 @@ export function getToolsBotDb(): ToolsBotDb {
 
 export function reminderPairId(userId: string, reminderKey: string): string {
   return `${userId}::${reminderKey}`;
+}
+
+const TOOLSBOT_KV_TABLE = '__toolsbot_kv__';
+
+export async function getToolsBotKv<T>(rowKey: string): Promise<T | undefined> {
+  return getRow<T>(TOOLSBOT_KV_TABLE, rowKey);
+}
+
+export async function setToolsBotKv<T>(rowKey: string, value: T): Promise<void> {
+  await putRow(TOOLSBOT_KV_TABLE, rowKey, value);
 }

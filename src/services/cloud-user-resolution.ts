@@ -2,6 +2,7 @@ import { Query } from 'node-appwrite';
 import { getAppwriteClient } from './appwrite-client';
 import { getAppConfig } from '../config';
 import { resolveCanonicalAppwriteUserId } from './identity';
+import { resolveAppwriteUserIdForDiscord } from './discord-identity-resolver';
 import { logger } from '../core/logger';
 
 const DISCORD_SNOWFLAKE_REGEX = /^\d{16,20}$/;
@@ -126,7 +127,8 @@ export async function resolveCloudUserIdCandidates(
   }
 
   const canonical = resolveCanonicalAppwriteUserId(normalized);
-  const baseCandidates = uniqueOrdered([canonical, normalized]);
+  const authoritative = await resolveAppwriteUserIdForDiscord(normalized).catch(() => null);
+  const baseCandidates = uniqueOrdered([authoritative, canonical, normalized]);
 
   let usernames = buildUsernameCandidates(context);
   if (usernames.length === 0 && isDiscordSnowflake(normalized)) {

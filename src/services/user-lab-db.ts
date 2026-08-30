@@ -64,7 +64,7 @@ function resolveLabCloudUserId(userId: string): string {
   return userId;
 }
 
-async function loadLocalUserLabSettings(userId: string): Promise<{ state: UserLabSettings | null; updatedAt: number | null }> {
+async function loadLocalUserLabSettingsLegacySqlite(userId: string): Promise<{ state: UserLabSettings | null; updatedAt: number | null }> {
   const database = getToolsBotDb();
   const row = await database.labSettings.get(userId);
   if (!row) {
@@ -84,7 +84,7 @@ async function loadLocalUserLabSettings(userId: string): Promise<{ state: UserLa
   };
 }
 
-async function saveLocalUserLabSettings(userId: string, settings: UserLabSettings): Promise<void> {
+async function saveLocalUserLabSettingsLegacySqlite(userId: string, settings: UserLabSettings): Promise<void> {
   const normalized = normalizeUserLabSettings(settings);
   const database = getToolsBotDb();
   await database.labSettings.put({
@@ -99,7 +99,29 @@ async function saveLocalUserLabSettings(userId: string, settings: UserLabSetting
   });
 }
 
-export async function getUserLabSettings(userId: string, context: LabCloudContext = {}): Promise<UserLabSettings> {
+async function loadLocalUserLabSettings(userId: string): Promise<{ state: UserLabSettings | null; updatedAt: number | null }> {
+  try {
+    const { loadLabSettingsFromRxDB } = await import('../rxdb/user-state-rxdb-store.js');
+    return await loadLabSettingsFromRxDB(userId);
+  } catch (error) {
+    logger.warn('[lab-settings] RxDB read failed; falling back to legacy sqlite', { userId, error });
+    return loadLocalUserLabSettingsLegacySqlite(userId);
+  }
+}
+
+async function saveLocalUserLabSettings(userId: string, settings: UserLabSettings): Promise<void> {
+  try {
+    const { saveLabSettingsToRxDB } = await import('../rxdb/user-state-rxdb-store.js');
+    await saveLabSettingsToRxDB(userId, settings);
+    return;
+  } catch (error) {
+    logger.warn('[lab-settings] RxDB write failed; falling back to legacy sqlite', { userId, error });
+  }
+
+  await saveLocalUserLabSettingsLegacySqlite(userId, settings);
+}
+
+export async function getUserLabSettings(userId: string, _context: LabCloudContext = {}): Promise<UserLabSettings> {
   try {
     const local = await loadLocalUserLabSettings(userId);
     return local.state ?? { ...DEFAULT_SETTINGS, labLevels: {} };

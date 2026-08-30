@@ -218,7 +218,7 @@ function buildSettingsComponents(candidate: LocalSharedUserToolSettings) {
       .setPlaceholder(settingsConfig.ui.languagePlaceholder)
       .setMinValues(1)
       .setMaxValues(1)
-      .addOptions(governedLanguagePreferenceIds.map(language => ({
+      .addOptions(governedLanguagePreferenceIds.map((language: string) => ({
         label: language === 'auto'
           ? settingsConfig.ui.autoOptionLabel
           : (governedLanguageOptions.find(entry => entry.id === language)?.label ?? language),
@@ -233,7 +233,7 @@ function buildSettingsComponents(candidate: LocalSharedUserToolSettings) {
       .setPlaceholder(settingsConfig.ui.dateFormatPlaceholder)
       .setMinValues(1)
       .setMaxValues(1)
-      .addOptions(governedDateFormatPreferenceIds.map(dateFormat => ({
+      .addOptions(governedDateFormatPreferenceIds.map((dateFormat: string) => ({
         label: dateFormat === 'auto'
           ? settingsConfig.ui.autoOptionLabel
           : (governedDateFormatOptions.find(entry => entry.id === dateFormat)?.label ?? dateFormat),
@@ -248,7 +248,7 @@ function buildSettingsComponents(candidate: LocalSharedUserToolSettings) {
       .setPlaceholder(settingsConfig.ui.decimalSeparatorPlaceholder)
       .setMinValues(1)
       .setMaxValues(1)
-      .addOptions(governedDecimalSeparatorPreferenceIds.map(decimalSeparator => ({
+      .addOptions(governedDecimalSeparatorPreferenceIds.map((decimalSeparator: string) => ({
         label: decimalSeparator === 'auto'
           ? settingsConfig.ui.autoOptionLabel
           : (governedDecimalSeparatorOptions.find(entry => entry.id === decimalSeparator)?.label ?? decimalSeparator),

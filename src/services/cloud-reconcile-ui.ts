@@ -4,6 +4,10 @@ import {
   ButtonStyle,
   type ChatInputCommandInteraction,
 } from 'discord.js';
+import {
+  applyAutoCloudReconcile,
+  type SyncedStateReconcileResult,
+} from '@tmrxjd/platform/tools';
 
 type Direction = 'cloud-newer' | 'local-newer' | 'unknown';
 
@@ -49,19 +53,23 @@ export async function runCloudReconcileUi<T>(params: ReconcileUiParams<T>): Prom
   }
 
   if (params.autoCloudEnabled) {
-    // When timestamps are ambiguous, keep local as source of truth to avoid accidental cloud overwrite.
-    if (params.direction !== 'cloud-newer') {
-      await params.applyLocalToCloud();
-      return;
-    }
-
-    if (params.cloudState) {
-      const applied = await params.applyCloudToLocal();
-      if (applied) {
-        await params.onCloudApplied(applied);
-      }
-    }
-
+    await applyAutoCloudReconcile({
+      autoCloudEnabled: params.autoCloudEnabled,
+      hasDifference: params.hasDifference,
+      direction: params.direction,
+      localUpdatedAt: null,
+      cloudUpdatedAt: null,
+      localState: null as T,
+      cloudState: params.cloudState,
+      applyCloudToLocal: async () => {
+        const applied = await params.applyCloudToLocal();
+        if (applied) {
+          await params.onCloudApplied(applied);
+        }
+        return applied;
+      },
+      applyLocalToCloud: params.applyLocalToCloud,
+    } satisfies SyncedStateReconcileResult<T>, { preferLocalWhenAmbiguous: true });
     return;
   }
 

@@ -185,6 +185,7 @@ describe('user cloud boundaries', () => {
       labSpeed: 1,
       labRelic: 1,
       labDiscount: 1,
+      gemDiscount: 0,
       speedUp: 1,
       hideMaxedLabs: true,
       labLevels: {

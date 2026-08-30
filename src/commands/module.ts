@@ -17,14 +17,14 @@ import {
   buildModuleCalculatorView,
   type ConfigurableCell,
   type ConfigurableTableDocument,
-  createDefaultModuleCalculatorState,
+  buildDefaultModuleCalculatorState,
   formatCoin,
   formatModuleMultiplierVisualRounded,
   formatShard,
   normalizeModuleCalculatorState,
   moduleRarityItems,
   moduleTypeItems,
-  resolveRarityLabel,
+  findRarityLabel,
   type ModuleCalculatorState,
   type ModuleType,
 } from '@tmrxjd/platform/tools';
@@ -305,7 +305,7 @@ export const moduleCommand: CommandModule = {
       return;
     }
 
-    const defaultState = createDefaultModuleCalculatorState();
+    const defaultState = buildDefaultModuleCalculatorState();
     const hasMeaningfulState = (candidate: ModuleCalculatorState): boolean => (
       JSON.stringify(candidate) !== JSON.stringify(defaultState)
     );
@@ -567,7 +567,7 @@ export const moduleCommand: CommandModule = {
         const nextShardDiscount = Number.parseInt(submitted.fields.getTextInputValue(moduleConfig.ids.shardDiscountInput), 10);
         const nextCurrentLevel = Number.parseInt(submitted.fields.getTextInputValue(moduleConfig.ids.currentLevelInput), 10);
         const nextTargetLevel = Number.parseInt(submitted.fields.getTextInputValue(moduleConfig.ids.targetLevelInput), 10);
-        const resolvedRarity = resolveRarityLabel(getSelectedModalValue(submitted, moduleConfig.ids.primaryRaritySelect));
+        const resolvedRarity = findRarityLabel(getSelectedModalValue(submitted, moduleConfig.ids.primaryRaritySelect));
 
         if (
           !Number.isFinite(nextCoinDiscount)
@@ -664,7 +664,7 @@ export const moduleCommand: CommandModule = {
         const nextAssistEffPct = Number.parseInt(submitted.fields.getTextInputValue(moduleConfig.ids.assistEffInput), 10);
         const nextAssistCurrentLevel = Number.parseInt(submitted.fields.getTextInputValue(moduleConfig.ids.assistCurrentLevelInput), 10);
         const nextAssistTargetLevel = Number.parseInt(submitted.fields.getTextInputValue(moduleConfig.ids.assistTargetLevelInput), 10);
-        const resolvedAssistRarity = resolveRarityLabel(getSelectedModalValue(submitted, moduleConfig.ids.assistRaritySelect));
+        const resolvedAssistRarity = findRarityLabel(getSelectedModalValue(submitted, moduleConfig.ids.assistRaritySelect));
 
         if (
           !Number.isFinite(nextAssistEffPct)

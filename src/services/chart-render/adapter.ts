@@ -1,12 +1,12 @@
 import {
-  createNapiRsCanvasChartRenderRuntime,
+  buildNapiRsCanvasChartRenderRuntime,
   renderSharedChartPng,
   type ChartPalettePresetId,
   type SharedChartRendererKey,
 } from '@tmrxjd/platform/tools'
 import { createCanvas } from '@napi-rs/canvas'
 
-const runtime = createNapiRsCanvasChartRenderRuntime((width, height) => createCanvas(width, height))
+const runtime = buildNapiRsCanvasChartRenderRuntime((width, height) => createCanvas(width, height))
 
 export async function renderSharedChartByKey(
   rendererKey: SharedChartRendererKey,

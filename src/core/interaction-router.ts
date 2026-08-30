@@ -3,6 +3,7 @@ import { logger } from './logger';
 import { ToolsBotClient } from './tools-bot-client';
 import { getBotConfig } from '../config/bot-config';
 import { ANALYTICS_EVENT_COMMAND_INVOKED, ANALYTICS_EVENT_CONTEXT_INVOKED } from '@tmrxjd/platform/tools';
+import { resolveAppwriteUserIdForDiscord } from '../services/discord-identity-resolver';
 
 const commonResponses = getBotConfig().common.responses;
 
@@ -28,6 +29,7 @@ export function registerInteractionRouter(client: ToolsBotClient) {
           }
           return;
         }
+        await resolveAppwriteUserIdForDiscord(interaction.user.id).catch(() => null);
         await command.execute(interaction);
         client.persistence?.analytics.log({
           commandName: interaction.commandName,

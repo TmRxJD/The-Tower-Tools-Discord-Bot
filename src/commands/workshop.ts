@@ -4,7 +4,7 @@ import {
   SlashCommandBuilder,
 } from 'discord.js';
 import type { CommandModule } from '../core/command-types';
-import { buildWorkshopLevelCostRows, getDefaultLevelRange, getWorkshopCostLevelsByKey, resolveWorkshopTotalDiscountPercent } from '@tmrxjd/platform/tools';
+import { buildWorkshopLevelCostRows, getDefaultLevelRange, getWorkshopCostLevelsByKey, computeWorkshopTotalDiscountPercent } from '@tmrxjd/platform/tools';
 import { getBotConfig } from '../config/bot-config';
 import { brandCommandEmbed } from '../services/command-embed-branding';
 import { appendShareButtonRow, shareCurrentRender } from '../services/command-share';
@@ -281,7 +281,7 @@ export const workshopCommand: CommandModule = {
         };
       }
 
-      const totalDiscount = resolveWorkshopTotalDiscountPercent(discount, vaultDiscount);
+      const totalDiscount = computeWorkshopTotalDiscountPercent(discount, vaultDiscount);
       const rows = buildWorkshopLevelCostRows(costLevels, currentLevel, targetLevel, totalDiscount);
       const total = rows.length > 0 ? rows[rows.length - 1].cumulativeCost : 0;
 

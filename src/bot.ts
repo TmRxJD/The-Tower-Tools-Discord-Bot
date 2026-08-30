@@ -9,11 +9,15 @@ import { registerInteractionRouter } from './core/interaction-router';
 import { registerEvents } from './events';
 import { commandModules } from './commands';
 import { registerComponentHandlers } from './interactions';
+import { stopBattleConditionsBridgeServer } from './services/battle-conditions-bridge';
 import { stopBattleConditionsScheduler } from './services/battle-conditions-scheduler';
 import { assertToolsBotPersistentStorage, getToolsBotStorageStatus } from './services/idb';
+import { ensureTrackerRunNodeRxDBStorage } from '@tmrxjd/platform/node';
+import { logToolsUserStateInboundChanges } from './rxdb/reactive-sync';
 import { createPersistence } from './persistence';
 import { prewarmTrackerAiAskRuntime } from './services/trackerai-ask';
 import { stopReminderScheduler } from './services/reminder-scheduler';
+import { stopCloudSyncOutboxDrainScheduler } from './services/cloud-sync-outbox-drain';
 
 function registerShutdownHandlers(cleanup: (reason: string, error?: unknown) => Promise<void>): void {
   process.once('SIGINT', () => {
@@ -45,7 +49,9 @@ async function bootstrap() {
 
     cleanupStarted = true;
     stopReminderScheduler();
+    stopBattleConditionsBridgeServer();
     stopBattleConditionsScheduler();
+    stopCloudSyncOutboxDrainScheduler();
     if (error) {
       logger.error(`ToolsBot shutting down after ${reason}`, error);
       process.exitCode = 1;
@@ -59,6 +65,8 @@ async function bootstrap() {
 
   try {
     await assertToolsBotPersistentStorage();
+    ensureTrackerRunNodeRxDBStorage({ dbFileName: 'tools-bot-user-state-rxdb.sqlite' });
+    logToolsUserStateInboundChanges();
     const storageStatus = await getToolsBotStorageStatus();
     logger.info('ToolsBot sqlite storage initialized', storageStatus);
     void prewarmTrackerAiAskRuntime();

@@ -1,11 +1,12 @@
 import {
   buildSyncedStateReconcileResult,
-  createDefaultShardSplitterSnapshot,
+  buildDefaultShardSplitterSnapshot,
   normalizeShardSplitterSnapshot,
   saveSyncedToolState,
   stableEquals,
-  SHARD_SPLITTER_COLLECTION,
-  SHARD_SPLITTER_RECORD_ID,
+  SHARD_SPLITTER_SETTINGS_DEXIE_COLLECTION,
+  SHARD_SPLITTER_SETTINGS_RECORD_ID,
+  SHARD_SPLITTER_SETTINGS_LEGACY_RECORD_ID,
   type ShardSplitterSnapshot,
 } from '@tmrxjd/platform/tools';
 import { z } from 'zod';
@@ -21,7 +22,7 @@ import { getEffectiveUserSharedSettings } from './user-shared-settings-db';
 const SHARD_SPLITTER_SCOPE = 'shard-splitter-state';
 
 function makeShardSplitterRowId(userId: string): string {
-  return `${userId}::${SHARD_SPLITTER_RECORD_ID}`;
+  return `${userId}::${SHARD_SPLITTER_SETTINGS_LEGACY_RECORD_ID}`;
 }
 
 function makeStableShardSplitterRowId(userId: string): string {
@@ -68,7 +69,7 @@ async function isCloudSyncEnabledForUser(userId: string): Promise<boolean> {
 }
 
 function getDefaultUserShardSplitterState(): UserShardSplitterState {
-  const snapshot = createDefaultShardSplitterSnapshot();
+  const snapshot = buildDefaultShardSplitterSnapshot();
   return {
     snapshot,
     rawData: { ...snapshot },
@@ -94,7 +95,7 @@ async function loadLocalUserShardSplitterState(userId: string): Promise<{ state:
   }
 
   if (!row) {
-    row = await database.shardSplitterSettings.where('[userId+recordId]').equals([userId, SHARD_SPLITTER_RECORD_ID]).first();
+    row = await database.shardSplitterSettings.where('[userId+recordId]').equals([userId, SHARD_SPLITTER_SETTINGS_LEGACY_RECORD_ID]).first();
   }
 
   if (!row || !row.data || typeof row.data !== 'object') {
@@ -113,8 +114,8 @@ async function loadLocalUserShardSplitterState(userId: string): Promise<{ state:
     await database.shardSplitterSettings.put({
       id: stableId,
       userId,
-      collection: SHARD_SPLITTER_COLLECTION,
-      recordId: SHARD_SPLITTER_RECORD_ID,
+      collection: SHARD_SPLITTER_SETTINGS_DEXIE_COLLECTION,
+      recordId: SHARD_SPLITTER_SETTINGS_RECORD_ID,
       data: parsedState.rawData,
       updatedAt: Date.now(),
     });
@@ -133,8 +134,8 @@ async function saveLocalUserShardSplitterState(userId: string, state: UserShardS
   await database.shardSplitterSettings.put({
     id: makeStableShardSplitterRowId(userId),
     userId,
-    collection: SHARD_SPLITTER_COLLECTION,
-    recordId: SHARD_SPLITTER_RECORD_ID,
+    collection: SHARD_SPLITTER_SETTINGS_DEXIE_COLLECTION,
+    recordId: SHARD_SPLITTER_SETTINGS_RECORD_ID,
     data: normalizedState.rawData,
     updatedAt: Date.now(),
   });

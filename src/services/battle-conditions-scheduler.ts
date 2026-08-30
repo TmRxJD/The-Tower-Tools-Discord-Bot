@@ -1,4 +1,5 @@
 import {
+  battleConditionsSchedulerFallbackIntervalMs,
   battleConditionsSourceGuildId,
 } from '@tmrxjd/platform/tools';
 import type { ToolsBotClient } from '../core/tools-bot-client';
@@ -10,16 +11,14 @@ import {
 import {
   getBattleConditionsSchedulerState,
   listBattleConditionsSubscriptions,
-  markBattleConditionsDelivered,
   saveBattleConditionsSchedulerState,
 } from './battle-conditions-db';
 import {
   getActiveBattleConditionsWindow,
   getConfiguredBattleConditionsRanks,
-  isBattleConditionsRankEnabled,
   isBattleConditionsRecordFreshForWindow,
 } from './battle-conditions-runtime';
-import { sendBattleConditionsRecordToChannel } from './battle-conditions-discord';
+import { deliverBattleConditionsRecords } from './battle-conditions-delivery';
 
 let interval: NodeJS.Timeout | null = null;
 type LocalBattleConditionsRank = 'legends' | 'champ' | 'plat' | 'gold' | 'silver';
@@ -34,48 +33,6 @@ async function loadFreshRecords(requiredRanks: LocalBattleConditionsRank[], star
     }
   }
   return result;
-}
-
-async function deliverRecords(client: ToolsBotClient, records: Partial<Record<LocalBattleConditionsRank, BattleConditionsRecord>>) {
-  const subscriptions = await listBattleConditionsSubscriptions();
-  for (const subscription of subscriptions) {
-    if (subscription.guildId === battleConditionsSourceGuildId) {
-      continue;
-    }
-
-    for (const [rank, record] of Object.entries(records) as Array<[LocalBattleConditionsRank, BattleConditionsRecord | undefined]>) {
-      if (!record) {
-        continue;
-      }
-
-      const channelId = subscription.channels[rank];
-      if (!channelId || !isBattleConditionsRankEnabled(subscription.channels, subscription.enabled, rank)) {
-        continue;
-      }
-
-      if (subscription.deliveredTournamentDates[rank] === record.tournamentDate) {
-        continue;
-      }
-
-      try {
-        const sent = await sendBattleConditionsRecordToChannel(client, subscription.guildId, channelId, record);
-        if (sent.ok) {
-          await markBattleConditionsDelivered({
-            guildId: subscription.guildId,
-            rank,
-            tournamentDate: record.tournamentDate,
-          });
-        }
-      } catch (error) {
-        logger.warn('Failed to repost battle conditions', {
-          guildId: subscription.guildId,
-          rank,
-          channelId,
-          error,
-        });
-      }
-    }
-  }
 }
 
 async function checkAndSend(client: ToolsBotClient): Promise<void> {
@@ -103,7 +60,7 @@ async function checkAndSend(client: ToolsBotClient): Promise<void> {
     }
   }
 
-  await deliverRecords(client, records);
+  await deliverBattleConditionsRecords(client, records);
 
   const resolved = configuredRanks.every(rank => isBattleConditionsRecordFreshForWindow(records[rank] ?? null, window));
   await saveBattleConditionsSchedulerState({
@@ -123,8 +80,11 @@ export function startBattleConditionsScheduler(client: ToolsBotClient): void {
   void checkAndSend(client);
   interval = setInterval(() => {
     void checkAndSend(client);
-  }, 60 * 1000);
-  logger.info('Battle conditions scheduler started');
+  }, battleConditionsSchedulerFallbackIntervalMs);
+  logger.info('Battle conditions scheduler started', {
+    intervalMs: battleConditionsSchedulerFallbackIntervalMs,
+    mode: 'fallback',
+  });
 }
 
 export function stopBattleConditionsScheduler(): void {
