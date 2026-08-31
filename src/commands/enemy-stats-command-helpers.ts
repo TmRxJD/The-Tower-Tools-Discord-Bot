@@ -31,6 +31,11 @@ export function resolveEnemyType(state: EnemyStatsSharedState): EnemyWaveEnemyTy
   return isEnemyWaveType(state.enemyType) ? state.enemyType : 'Basic'
 }
 
+/** Compact number, or an em-dash for values the model doesn't define (e.g. Protector HP). */
+function stat(value: number): string {
+  return Number.isFinite(value) ? formatCompact(value) : '—'
+}
+
 /** Whole seconds when integral, else one decimal. */
 function formatSeconds(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1)
@@ -71,13 +76,13 @@ export function buildEnemyStatsChartRows(state: EnemyStatsSharedState): EnemySta
   const row = panel.rows[0]
 
   const rows: string[][] = [
-    ['Health', formatCompact(row.adjustedHp)],
-    ['Attack', formatCompact(row.adjustedDamage)],
+    ['Health', stat(row.adjustedHp)],
+    ['Attack', stat(row.adjustedDamage)],
     ['Speed', row.speed.toFixed(2)],
     ['Mass', row.mass.toFixed(1)],
     ['Spawn Chance', `${row.spawnChancePct.toFixed(1)}%`],
-    ['Wave Base HP', formatCompact(panel.waveBaseHp)],
-    ['Wave Base Attack', formatCompact(panel.waveBaseDamage)],
+    ['Wave Base HP', stat(panel.waveBaseHp)],
+    ['Wave Base Attack', stat(panel.waveBaseDamage)],
   ]
 
   const descriptionLines = [
