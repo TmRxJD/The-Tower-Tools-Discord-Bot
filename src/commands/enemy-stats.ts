@@ -288,6 +288,11 @@ export const enemyStatsCommand: CommandModule = {
 
 
 
+    // Acknowledge within Discord's 3s window BEFORE any cloud/storage reads, or a
+    // slow round-trip expires the interaction ("Unknown interaction"). Defer first,
+    // then do the work and editReply.
+    await interaction.deferReply({ ephemeral: true });
+
     const defaultState = normalizeEnemyStatsSharedState(null);
 
     const resolvedStorage = await resolveUserStorageState({
@@ -493,8 +498,6 @@ export const enemyStatsCommand: CommandModule = {
     };
 
 
-
-    await interaction.deferReply({ ephemeral: true });
 
     const initialRender = await createRender();
 
