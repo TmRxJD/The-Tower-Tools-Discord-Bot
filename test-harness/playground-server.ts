@@ -30,10 +30,10 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/run') {
       let body = ''
       for await (const chunk of req) body += chunk
-      const { command, options } = JSON.parse(body || '{}') as { command: string, options?: Record<string, unknown> }
+      const { command, options, steps } = JSON.parse(body || '{}') as { command: string, options?: Record<string, unknown>, steps?: unknown[] }
       if (!command) { res.writeHead(400); res.end('{"error":"command required"}'); return }
 
-      const result = await runCommand(command, toExportName(command), (options ?? {}) as any)
+      const result = await runCommand(command, toExportName(command), (options ?? {}) as any, (steps ?? []) as any)
       const serialized = {
         ...result,
         responses: result.responses.map(r => ({

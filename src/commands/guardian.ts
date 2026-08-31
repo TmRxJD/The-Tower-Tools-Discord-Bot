@@ -215,6 +215,9 @@ const data = new SlashCommandBuilder()
   )
 
 export const guardianCommand = createChatInputCommand(data, async interaction => {
+  // Acknowledge within Discord's 3s window BEFORE any cloud/storage reads.
+  await interaction.deferReply({ ephemeral: true })
+
   const defaultState = normalizeGuardianSharedState(null)
   const hasMeaningfulState = (candidate: GuardianSharedState): boolean => (
     !stableEquals(candidate, defaultState)
@@ -239,9 +242,8 @@ export const guardianCommand = createChatInputCommand(data, async interaction =>
   if (optionType) {
     const found = guardianByKey.get(optionType.toLowerCase())
     if (!found) {
-      await interaction.reply({
+      await interaction.editReply({
         content: guardianConfig.ui.unknownTypeTemplate.replace('{type}', optionType),
-        ephemeral: true,
       })
       return
     }
@@ -451,7 +453,6 @@ export const guardianCommand = createChatInputCommand(data, async interaction =>
         return appendShareButtonRow([typeRow, statRow, buttonRow], GUARDIAN_SHARE_BUTTON_ID)
   }
 
-  await interaction.deferReply({ ephemeral: true })
   const initial = await createRender()
   await interaction.editReply({
     embeds: [initial.embed],

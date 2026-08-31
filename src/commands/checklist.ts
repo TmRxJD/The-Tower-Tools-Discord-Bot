@@ -48,6 +48,9 @@ export const checklistCommand: CommandModule = {
       return;
     }
 
+    // Acknowledge within Discord's 3s window BEFORE any cloud/storage reads.
+    await interaction.deferReply({ ephemeral: true });
+
     const discordUserId = interaction.user.id;
 
     const hasMeaningfulChecklist = (candidate: Awaited<ReturnType<typeof getUserChecklist>>): boolean => (
@@ -139,12 +142,11 @@ export const checklistCommand: CommandModule = {
       new ButtonBuilder().setCustomId(checklistIds.reset).setLabel(checklistUi.resetButton).setStyle(ButtonStyle.Danger)
     );
 
-    const response = await interaction.reply({
+    await interaction.editReply({
       embeds: [buildEmbed()],
       components: [...buildTaskRows(), buildControlRow()],
-      ephemeral: true,
-      fetchReply: true,
     });
+    const response = await interaction.fetchReply();
 
     void (async () => {
       const reconcile = await reconcileUserChecklistState(storageUserId);

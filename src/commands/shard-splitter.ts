@@ -204,6 +204,9 @@ const data = new SlashCommandBuilder()
   );
 
 export const shardSplitterCommand = createChatInputCommand(data, async interaction => {
+  // Acknowledge within Discord's 3s window BEFORE any cloud/storage reads.
+  await interaction.deferReply({ ephemeral: true });
+
   const discordUserId = interaction.user.id;
   const hasMeaningfulShardState = (candidate: Awaited<ReturnType<typeof getUserShardSplitterState>>): boolean => {
     const defaults = buildDefaultShardSplitterSnapshot();
@@ -422,14 +425,12 @@ export const shardSplitterCommand = createChatInputCommand(data, async interacti
     };
   };
 
-  const renderAndReply = async (update?: { edit: boolean }) => {
+  const renderAndReply = async () => {
     const payload = await buildRenderPayload();
 
-    if (update?.edit) {
-      await interaction.editReply(payload);
-    } else {
-      await interaction.reply(payload);
-    }
+    // Always an edit: the interaction is deferred up front, so the first render
+    // resolves the defer and every refresh edits the same reply.
+    await interaction.editReply(payload);
   };
 
   await renderAndReply();
@@ -448,7 +449,7 @@ export const shardSplitterCommand = createChatInputCommand(data, async interacti
       applyLocalToCloud: reconcile.applyLocalToCloud,
       onCloudApplied: async (next) => {
         persistedState = next;
-        await renderAndReply({ edit: true });
+        await renderAndReply();
       },
     });
   })();
@@ -494,7 +495,7 @@ export const shardSplitterCommand = createChatInputCommand(data, async interacti
       persistedState.snapshot.selectedModuleType = selected;
       await saveUserShardSplitterState(storageUserId, persistedState);
       await componentInteraction.deferUpdate();
-      await renderAndReply({ edit: true });
+      await renderAndReply();
       return;
     }
 
@@ -613,7 +614,7 @@ export const shardSplitterCommand = createChatInputCommand(data, async interacti
 
       await saveUserShardSplitterState(storageUserId, persistedState);
       await submitted.deferUpdate();
-      await renderAndReply({ edit: true });
+      await renderAndReply();
       return;
     }
 
@@ -706,7 +707,7 @@ export const shardSplitterCommand = createChatInputCommand(data, async interacti
 
       await saveUserShardSplitterState(storageUserId, persistedState);
       await submitted.deferUpdate();
-      await renderAndReply({ edit: true });
+      await renderAndReply();
       return;
     }
 
@@ -738,7 +739,7 @@ export const shardSplitterCommand = createChatInputCommand(data, async interacti
       };
 
       await saveUserShardSplitterState(storageUserId, persistedState);
-      await renderAndReply({ edit: true });
+      await renderAndReply();
       return;
     }
   });

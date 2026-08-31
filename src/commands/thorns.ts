@@ -153,6 +153,9 @@ export const thornsCommand: CommandModule = {
       return;
     }
 
+    // Acknowledge within Discord's 3s window BEFORE any cloud/storage reads.
+    await interaction.deferReply({ ephemeral: true });
+
     const defaultState = normalizeThornsSharedState(null);
     const hasMeaningfulState = (candidate: ThornsSharedState): boolean => (
       JSON.stringify(candidate) !== JSON.stringify(defaultState)
@@ -299,7 +302,6 @@ export const thornsCommand: CommandModule = {
       ),
     ], THORNS_SHARE_BUTTON_ID);
 
-    await interaction.deferReply({ ephemeral: true });
     const initialRender = await createRender();
     await interaction.editReply({ embeds: [initialRender.embed], components: buildComponents(), files: initialRender.files });
 

@@ -63,6 +63,9 @@ export const analyticsCommand: CommandModule = {
       return;
     }
 
+    // Acknowledge within Discord's 3s window BEFORE the usage queries (real I/O).
+    await interaction.deferReply({ ephemeral: true });
+
     const days = interaction.options.getInteger(analyticsConfig.options.days.name) ?? 7;
     const [rows, events] = await Promise.all([
       queryDailyCommandUsage(days),
@@ -70,7 +73,7 @@ export const analyticsCommand: CommandModule = {
     ]);
 
     if (rows.length === 0) {
-      await interaction.reply({ content: analyticsConfig.noData, ephemeral: true });
+      await interaction.editReply({ content: analyticsConfig.noData });
       return;
     }
 
@@ -91,6 +94,6 @@ export const analyticsCommand: CommandModule = {
       .setColor(analyticsConfig.color)
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.editReply({ embeds: [embed] });
   },
 };

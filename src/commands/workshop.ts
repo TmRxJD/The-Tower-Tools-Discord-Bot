@@ -135,6 +135,9 @@ export const workshopCommand: CommandModule = {
       return;
     }
 
+    // Acknowledge within Discord's 3s window BEFORE any cloud/storage reads.
+    await interaction.deferReply({ ephemeral: true });
+
     const defaultState = normalizeWorkshopSharedState(null);
     const hasMeaningfulState = (candidate: WorkshopSharedState): boolean => (
       JSON.stringify(candidate) !== JSON.stringify(defaultState)
@@ -340,7 +343,6 @@ export const workshopCommand: CommandModule = {
 
     const buildComponents = () => appendShareButtonRow(buildWorkshopComponents(mode, section, stat, hideBaseCosts), WORKSHOP_SHARE_BUTTON_ID);
 
-  await interaction.deferReply({ ephemeral: true });
     const initialRender = await createRender();
   await interaction.editReply({ embeds: [initialRender.embed], components: buildComponents(), files: initialRender.files });
 

@@ -234,6 +234,9 @@ export const botsCommand: CommandModule = {
   async execute(interaction) {
     if (!interaction.isChatInputCommand()) return
 
+    // Acknowledge within Discord's 3s window BEFORE any cloud/storage reads.
+    await interaction.deferReply({ ephemeral: true })
+
     const defaultState = normalizeBotsSharedState(null)
     const hasMeaningfulState = (candidate: BotSessionState): boolean => hasMeaningfulBotsState(candidate) && JSON.stringify(candidate) !== JSON.stringify(defaultState)
     const resolvedStorage = await resolveUserStorageState({
@@ -523,7 +526,6 @@ export const botsCommand: CommandModule = {
 
     const buildComponents = () => appendShareButtonRow([createBotRow(), createStatRow(), createActionRow()], BOTS_SHARE_BUTTON_ID)
 
-    await interaction.deferReply({ ephemeral: true })
     const initialRender = await createRender()
 
     await interaction.editReply({

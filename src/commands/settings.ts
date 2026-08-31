@@ -267,6 +267,9 @@ export const settingsCommand: CommandModule = {
       return
     }
 
+    // Acknowledge within Discord's 3s window BEFORE any cloud/storage reads.
+    await interaction.deferReply({ ephemeral: true })
+
     const cloudSyncValue = interaction.options.getString(settingsConfig.options.cloudSync.name)
     const paletteValue = interaction.options.getString(settingsConfig.options.chartPalette.name)
     const alignmentValue = interaction.options.getString(settingsConfig.options.chartAlignment.name)
@@ -376,7 +379,7 @@ export const settingsCommand: CommandModule = {
       return embed
     }
 
-    await interaction.reply({ embeds: [buildEmbed(updated, status)], components: buildSettingsComponents(updated), ephemeral: true })
+    await interaction.editReply({ embeds: [buildEmbed(updated, status)], components: buildSettingsComponents(updated) })
 
     const reply = await interaction.fetchReply()
     if ('createMessageComponentCollector' in reply) {

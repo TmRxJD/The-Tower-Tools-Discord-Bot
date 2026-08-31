@@ -305,6 +305,9 @@ export const moduleCommand: CommandModule = {
       return;
     }
 
+    // Acknowledge within Discord's 3s window BEFORE any cloud/storage reads.
+    await interaction.deferReply({ ephemeral: true });
+
     const defaultState = buildDefaultModuleCalculatorState();
     const hasMeaningfulState = (candidate: ModuleCalculatorState): boolean => (
       JSON.stringify(candidate) !== JSON.stringify(defaultState)
@@ -407,7 +410,6 @@ export const moduleCommand: CommandModule = {
       ),
     ], MODULE_SHARE_BUTTON_ID);
 
-    await interaction.deferReply({ ephemeral: true });
     const initialRender = await createRender();
 
     await interaction.editReply({

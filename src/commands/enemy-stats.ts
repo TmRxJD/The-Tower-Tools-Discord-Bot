@@ -601,9 +601,11 @@ export const enemyStatsCommand: CommandModule = {
 
         state = normalizeEnemyStatsSharedState({ ...state, mode: nextMode });
 
-        await persistState();
-
+        // Acknowledge within Discord's 3s window BEFORE the cloud write; a slow
+        // persistState() must never gate the ack or the component expires.
         await componentInteraction.deferUpdate();
+
+        await persistState();
 
         await refreshRender();
 
@@ -619,9 +621,11 @@ export const enemyStatsCommand: CommandModule = {
 
         state = normalizeEnemyStatsSharedState({ ...state, ...perks });
 
-        await persistState();
-
+        // Acknowledge within Discord's 3s window BEFORE the cloud write; a slow
+        // persistState() must never gate the ack or the component expires.
         await componentInteraction.deferUpdate();
+
+        await persistState();
 
         await refreshRender();
 
@@ -641,9 +645,11 @@ export const enemyStatsCommand: CommandModule = {
 
         });
 
-        await persistState();
-
+        // Acknowledge within Discord's 3s window BEFORE the cloud write; a slow
+        // persistState() must never gate the ack or the component expires.
         await componentInteraction.deferUpdate();
+
+        await persistState();
 
         await refreshRender();
 
@@ -735,9 +741,11 @@ export const enemyStatsCommand: CommandModule = {
 
 
 
-        await persistState();
-
+        // Acknowledge the modal submit BEFORE the cloud write, or a slow
+        // persistState() blows its 3s window and the submit fails live.
         await submitted.deferUpdate();
+
+        await persistState();
 
         await refreshRender();
 
@@ -931,9 +939,11 @@ export const enemyStatsCommand: CommandModule = {
 
         loadedFromTracker = false;
 
-        await persistState();
-
+        // Acknowledge the modal submit BEFORE the cloud write, or a slow
+        // persistState() blows its 3s window and the submit fails live.
         await submitted.deferUpdate();
+
+        await persistState();
 
         await refreshRender();
 
@@ -1085,9 +1095,11 @@ export const enemyStatsCommand: CommandModule = {
 
         });
 
-        await persistState();
-
+        // Acknowledge the modal submit BEFORE the cloud write, or a slow
+        // persistState() blows its 3s window and the submit fails live.
         await submitted.deferUpdate();
+
+        await persistState();
 
         await refreshRender();
 

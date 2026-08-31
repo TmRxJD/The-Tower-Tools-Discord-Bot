@@ -37,6 +37,9 @@ export const remindCommand: CommandModule = {
       return;
     }
 
+    // Acknowledge within Discord's 3s window BEFORE any cloud/storage reads.
+    await interaction.deferReply({ ephemeral: true });
+
     const userId = interaction.user.id;
 
     const hasMeaningfulReminders = (candidate: {
@@ -75,7 +78,6 @@ export const remindCommand: CommandModule = {
     const storageUserId = resolvedStorage.storageUserId;
     const resolvedReminderState = resolvedStorage.state;
 
-    await interaction.deferReply({ ephemeral: true });
     const message = await interaction.fetchReply();
 
     const userReminders = resolvedReminderState.toggles;

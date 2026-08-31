@@ -157,6 +157,9 @@ export const stoneCommand: CommandModule = {
   async execute(interaction) {
     if (!interaction.isChatInputCommand()) return
 
+    // Acknowledge within Discord's 3s window BEFORE any cloud/storage reads.
+    await interaction.deferReply({ ephemeral: true })
+
     const defaultState = normalizeStoneSharedState(null)
     const hasMeaningfulState = (candidate: StoneSharedState): boolean => (
       JSON.stringify(candidate) !== JSON.stringify(defaultState)
@@ -437,7 +440,6 @@ export const stoneCommand: CommandModule = {
       ], STONE_SHARE_BUTTON_ID)
     }
 
-    await interaction.deferReply({ ephemeral: true })
     const initialRender = await createRender()
 
     await interaction.editReply({
