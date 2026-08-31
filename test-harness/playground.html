@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bot Command Playground</title>
+<style>
+  :root { --bg:#1e1f22; --panel:#2b2d31; --panel2:#313338; --text:#dbdee1; --muted:#949ba4;
+    --accent:#5865f2; --ok:#23a55a; --bad:#f23f43; --embed:#232428; --bar:#4e5058; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 "gg sans",system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:14px 20px; background:var(--panel); border-bottom:1px solid #1a1b1e; }
+  header h1 { margin:0; font-size:16px; } header p { margin:4px 0 0; color:var(--muted); font-size:12px; }
+  main { display:grid; grid-template-columns: 340px 1fr; gap:16px; padding:16px; align-items:start; }
+  .card { background:var(--panel); border-radius:8px; padding:14px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:10px 0 4px; text-transform:uppercase; letter-spacing:.03em; }
+  input,select { width:100%; padding:8px 10px; background:var(--panel2); color:var(--text); border:1px solid #1a1b1e; border-radius:5px; font:inherit; }
+  button { margin-top:14px; width:100%; padding:10px; background:var(--accent); color:#fff; border:0; border-radius:5px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:progress; }
+  .opts { margin-top:8px; } .optrow { display:flex; gap:6px; margin-top:6px; }
+  .optrow input { flex:1; } .optrow button { width:auto; margin:0; padding:0 12px; background:var(--bar); }
+  .verdict { font-weight:700; padding:10px 12px; border-radius:6px; margin-bottom:12px; }
+  .verdict.ok { background:rgba(35,165,90,.15); color:var(--ok); }
+  .verdict.bad { background:rgba(242,63,67,.15); color:var(--bad); }
+  .viol { font-family:ui-monospace,monospace; font-size:12.5px; color:var(--bad); padding:4px 0; }
+  .resp { border-left:3px solid var(--bar); padding:2px 0 2px 12px; margin:12px 0; }
+  .resp .kind { font-size:12px; color:var(--muted); }
+  .embed { background:var(--embed); border-left:4px solid var(--accent); border-radius:4px; padding:12px 14px; margin-top:6px; max-width:520px; }
+  .embed .t { font-weight:700; margin-bottom:6px; } .embed .d { color:var(--text); white-space:pre-wrap; }
+  .field { margin-top:8px; } .field .n { font-weight:600; font-size:13px; } .field .v { color:var(--text); white-space:pre-wrap; }
+  .embed img { max-width:100%; border-radius:4px; margin-top:10px; display:block; }
+  .muted { color:var(--muted); } code { background:#00000030; padding:1px 5px; border-radius:4px; }
+  .err { color:var(--bad); font-family:ui-monospace,monospace; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Bot Command Playground</h1>
+  <p>Runs a command offline against the protocol-enforcing mock interaction — embeds, charts, and interaction-flow checks, no Discord.</p>
+</header>
+<main>
+  <section class="card">
+    <label>Command</label>
+    <select id="command">
+      <option value="enemy-stats">enemy-stats</option>
+      <option value="thorns">thorns</option>
+      <option value="workshop">workshop</option>
+      <option value="lab">lab</option>
+      <option value="module">module</option>
+      <option value="__custom">— other (type below) —</option>
+    </select>
+    <input id="commandCustom" placeholder="command name" style="display:none;margin-top:6px" />
+
+    <label>Options</label>
+    <div class="opts" id="opts"></div>
+    <button type="button" id="addOpt" style="background:var(--bar)">+ add option</button>
+
+    <button id="run">Run command</button>
+  </section>
+
+  <section class="card" id="output">
+    <p class="muted">Pick a command and hit Run. Presets below fill common options.</p>
+  </section>
+</main>
+<script>
+const $ = s => document.querySelector(s)
+const PRESETS = { 'enemy-stats': [['mode','wave'],['tier','5'],['wave','1000']] }
+
+function optRow(k='', v='') {
+  const row = document.createElement('div'); row.className = 'optrow'
+  row.innerHTML = `<input class="k" placeholder="name" value="${k}"><input class="v" placeholder="value" value="${v}"><button type="button">✕</button>`
+  row.querySelector('button').onclick = () => row.remove()
+  return row
+}
+function setOpts(pairs) { const box = $('#opts'); box.innerHTML=''; (pairs||[]).forEach(([k,v]) => box.appendChild(optRow(k,v))); if(!pairs?.length) box.appendChild(optRow()) }
+function currentCommand() { const c = $('#command').value; return c === '__custom' ? $('#commandCustom').value.trim() : c }
+function collectOptions() {
+  const o = {}
+  $('#opts').querySelectorAll('.optrow').forEach(r => {
+    const k = r.querySelector('.k').value.trim(); if(!k) return
+    let v = r.querySelector('.v').value; const n = Number(v)
+    o[k] = v!=='' && Number.isFinite(n) ? n : v
+  })
+  return o
+}
+
+$('#command').onchange = () => {
+  const c = $('#command').value
+  $('#commandCustom').style.display = c === '__custom' ? 'block' : 'none'
+  setOpts(PRESETS[c])
+}
+$('#addOpt').onclick = () => $('#opts').appendChild(optRow())
+
+function esc(s){ return String(s).replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])) }
+
+function renderEmbed(embed, files) {
+  if (!embed) return ''
+  let h = '<div class="embed">'
+  if (embed.title) h += `<div class="t">${esc(embed.title)}</div>`
+  if (embed.description) h += `<div class="d">${esc(embed.description)}</div>`
+  for (const f of embed.fields||[]) h += `<div class="field"><div class="n">${esc(f.name)}</div><div class="v">${esc(f.value)}</div></div>`
+  for (const file of files||[]) if (file.base64 && file.isPng) h += `<img alt="${esc(file.name)}" src="data:image/png;base64,${file.base64}">`
+  return h + '</div>'
+}
+
+async function run() {
+  const command = currentCommand()
+  if (!command) return
+  const btn = $('#run'); btn.disabled = true; btn.textContent = 'Running…'
+  const out = $('#output')
+  try {
+    const res = await fetch('/run', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ command, options: collectOptions() }) })
+    const data = await res.json()
+    let h = ''
+    const bad = (data.violations||[]).length > 0 || data.error
+    h += `<div class="verdict ${bad?'bad':'ok'}">interaction flow: ${bad ? (data.violations.length+' violation(s) ✗') : 'OK ✓'}</div>`
+    for (const v of data.violations||[]) h += `<div class="viol">✗ [${esc(v.rule)}] ${esc(v.detail)}</div>`
+    if (data.error) h += `<div class="err">runtime error: ${esc(data.error)}</div>`
+    h += `<p class="muted">${(data.responses||[]).length} response(s)</p>`
+    for (const r of data.responses||[]) {
+      h += `<div class="resp"><div class="kind">[+${r.atMs}ms] <b>${esc(r.kind)}</b>${r.ephemeral?' · ephemeral':''}${r.components?` · ${r.components} component row(s)`:''}${r.content?` · ${esc(r.content)}`:''}</div>`
+      h += renderEmbed(r.embeds && r.embeds[0], r.files)
+      h += `</div>`
+    }
+    out.innerHTML = h
+  } catch (e) {
+    out.innerHTML = `<div class="err">${esc(e.message||e)}</div>`
+  } finally { btn.disabled = false; btn.textContent = 'Run command' }
+}
+$('#run').onclick = run
+setOpts(PRESETS['enemy-stats'])
+</script>
+</body>
+</html>
