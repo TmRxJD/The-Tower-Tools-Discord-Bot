@@ -102,10 +102,23 @@ function checkPm2() {
 }
 
 function checkPackageAccess() {
-  execSync(`pnpm view @tmrxjd/platform version --registry ${platformRegistry} --json`, {
-    stdio: 'ignore',
-    env: process.env,
-  })
+  // Do NOT swallow the error: a registry-auth failure here previously surfaced
+  // only as "Command failed", which hid why the runner could not read the
+  // package. Capture stdout/stderr and re-throw with the real diagnostic.
+  try {
+    execSync(`pnpm view @tmrxjd/platform version --registry ${platformRegistry} --json`, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: process.env,
+      encoding: 'utf8',
+    })
+  } catch (error) {
+    const detail = [error?.stdout, error?.stderr].filter(Boolean).join('\n').trim()
+    throw new Error(
+      `Cannot read @tmrxjd/platform from ${platformRegistry}. `
+      + `Ensure the runner has a GitHub Packages read token (NODE_AUTH_TOKEN / .npmrc).`
+      + (detail ? `\n\nRegistry output:\n${detail}` : ''),
+    )
+  }
 }
 
 async function warnOnGlobalCommands() {
