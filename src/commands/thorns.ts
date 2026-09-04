@@ -9,6 +9,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from 'discord.js';
+import { MAX_CAMPAIGN_TIER } from 'thetowersdk';
 import type { CommandModule } from '../core/command-types';
 import {
   buildThornsBaseChart,
@@ -71,8 +72,9 @@ const data = new SlashCommandBuilder()
     option
       .setName(thornsConfig.options.tier.name)
       .setDescription(thornsConfig.options.tier.description)
+      // cap sourced from the SDK so a raised max tier no longer needs a bot edit
       .setMinValue(1)
-      .setMaxValue(21)
+      .setMaxValue(MAX_CAMPAIGN_TIER)
       .setRequired(false)
   )
   .addIntegerOption(option =>

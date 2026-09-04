@@ -14,6 +14,7 @@ import {
 import type { CommandModule } from '../core/command-types';
 import {
   ABSOLUTE_MAX_MODULE_LEVEL,
+  MAX_ASSIST_MULTIPLIER_EFFICIENCY_PCT,
   buildModuleCalculatorView,
   type ConfigurableCell,
   type ConfigurableTableDocument,
@@ -673,7 +674,7 @@ export const moduleCommand: CommandModule = {
           || !Number.isFinite(nextAssistCurrentLevel)
           || !Number.isFinite(nextAssistTargetLevel)
           || nextAssistEffPct < 0
-          || nextAssistEffPct > 100
+          || nextAssistEffPct > MAX_ASSIST_MULTIPLIER_EFFICIENCY_PCT
           || nextAssistCurrentLevel < 1
           || nextAssistCurrentLevel > ABSOLUTE_MAX_MODULE_LEVEL
           || nextAssistTargetLevel < nextAssistCurrentLevel

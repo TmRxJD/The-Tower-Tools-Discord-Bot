@@ -57,7 +57,7 @@
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.97",
-    "@tmrxjd/platform": "0.2.1",
+    "@tmrxjd/platform": "0.2.2",
     "canvas": "^3.2.1",
     "dexie": "^4.3.0",
     "discord.js": "^14.25.1",
