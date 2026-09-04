@@ -41,14 +41,17 @@ jobs:
           always-auth: true
 
       - name: Resolve deployment metadata
-        shell: pwsh
+        shell: node {0}
         run: |
-          if ($env:GITHUB_EVENT_NAME -eq 'repository_dispatch') {
-            "PLATFORM_VERSION=${{ github.event.client_payload.version }}" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          const fs = require('fs')
+          let platformVersion
+          if (process.env.GITHUB_EVENT_NAME === 'repository_dispatch') {
+            platformVersion = ${{ toJSON(github.event.client_payload.version) }} || ''
           } else {
-            $platformVersion = node -p "const pkg=require('./package.json'); pkg.dependencies?.['@tmrxjd/platform'] || pkg.devDependencies?.['@tmrxjd/platform'] || ''"
-            "PLATFORM_VERSION=$platformVersion" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            const pkg = require('./package.json')
+            platformVersion = pkg.dependencies?.['@tmrxjd/platform'] || pkg.devDependencies?.['@tmrxjd/platform'] || ''
           }
+          fs.appendFileSync(process.env.GITHUB_ENV, `PLATFORM_VERSION=${platformVersion}\n`)
 
       - name: Run preflight checks
         env:
@@ -64,27 +67,30 @@ jobs:
         run: pnpm run deploy:install
 
       - name: Validate local runtime env files
-        shell: pwsh
+        shell: node {0}
         run: |
-          if ($env:TOOLSBOT_ENV_DIR) {
-            if (-not (Test-Path $env:TOOLSBOT_ENV_DIR)) {
-              Write-Error "TOOLSBOT_ENV_DIR does not exist: $env:TOOLSBOT_ENV_DIR"
-              exit 1
+          const fs = require('fs')
+          const path = require('path')
+          let envRoot
+          if (process.env.TOOLSBOT_ENV_DIR) {
+            if (!fs.existsSync(process.env.TOOLSBOT_ENV_DIR)) {
+              console.error(`TOOLSBOT_ENV_DIR does not exist: ${process.env.TOOLSBOT_ENV_DIR}`)
+              process.exit(1)
             }
-            $envRoot = (Resolve-Path $env:TOOLSBOT_ENV_DIR).Path
+            envRoot = fs.realpathSync(process.env.TOOLSBOT_ENV_DIR)
           } else {
-            $envRoot = (Get-Location).Path
+            envRoot = process.cwd()
           }
 
-          $expected = @('.env.prod.local', '.env.prod', '.env.local', '.env') | ForEach-Object { Join-Path $envRoot $_ }
-          $found = $expected | Where-Object { Test-Path $_ }
-          if ($found.Count -gt 0) {
-            Write-Host "Using existing local env files from the runner: $($found -join ', ')"
-            exit 0
+          const expected = ['.env.prod.local', '.env.prod', '.env.local', '.env'].map(f => path.join(envRoot, f))
+          const found = expected.filter(f => fs.existsSync(f))
+          if (found.length > 0) {
+            console.log(`Using existing local env files from the runner: ${found.join(', ')}`)
+            process.exit(0)
           }
 
-          Write-Error "No local env file found on the runner. Expected one of: $($expected -join ', ')"
-          exit 1
+          console.error(`No local env file found on the runner. Expected one of: ${expected.join(', ')}`)
+          process.exit(1)
 
       - name: Build service
         run: pnpm run deploy:build
@@ -97,14 +103,14 @@ jobs:
 
       - name: Commit platform dependency bump
         if: github.event_name == 'repository_dispatch'
-        shell: pwsh
+        shell: node {0}
         run: |
-          git diff --quiet -- package.json pnpm-lock.yaml
-          if ($LASTEXITCODE -eq 0) {
-            exit 0
-          }
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json pnpm-lock.yaml
-          git commit -m "chore: bump @tmrxjd/platform to ${PLATFORM_VERSION}"
-          git push
+          const { execSync } = require('child_process')
+          const run = cmd => execSync(cmd, { stdio: 'inherit' })
+          const dirty = execSync('git status --porcelain -- package.json pnpm-lock.yaml').toString().trim()
+          if (!dirty) process.exit(0)
+          run('git config user.name "github-actions[bot]"')
+          run('git config user.email "41898282+github-actions[bot]@users.noreply.github.com"')
+          run('git add package.json pnpm-lock.yaml')
+          run(`git commit -m "chore: bump @tmrxjd/platform to ${process.env.PLATFORM_VERSION}"`)
+          run('git push')
