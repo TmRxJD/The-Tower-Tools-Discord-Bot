@@ -56,8 +56,9 @@
     "register:commands:clear:global": "cross-env DEPLOYMENT_MODE=prod NODE_ENV=production BOT_LOG_LEVEL=error ts-node src/scripts/delete-global-commands.ts"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
     "@napi-rs/canvas": "^0.1.97",
-    "@tmrxjd/platform": "0.2.3",
+    "@tmrxjd/platform": "0.2.4",
     "canvas": "^3.2.1",
     "dexie": "^4.3.0",
     "discord.js": "^14.25.1",

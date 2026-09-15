@@ -1,8 +1,8 @@
 import {
-  buildChartStudioPreviewDocument,
   buildChartRenderRequest,
   type SharedChartPath,
 } from '@tmrxjd/platform/tools'
+import { buildChartStudioPreviewDocument } from '@tmrxjd/platform/tools/charts'
 import {
   buildRenderedChartAttachment,
 } from './attachment'
