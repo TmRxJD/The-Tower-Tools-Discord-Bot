@@ -1118,7 +1118,7 @@ export const defaultBotConfig = {
       },
       ai: {
         endpoint: 'https://api.groq.com/openai/v1/chat/completions',
-        model: 'qwen/qwen3-32b',
+        model: 'qwen/qwen3.8-27b',
         maxTokens: 100,
         temperature: 0.9,
         timeoutMs: 15000,

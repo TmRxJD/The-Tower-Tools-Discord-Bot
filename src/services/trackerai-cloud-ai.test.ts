@@ -20,7 +20,7 @@ describe('trackerai-cloud-ai', () => {
   beforeEach(() => {
     process.env.TRACKERAI_CLOUD_AI_ENDPOINT = 'https://api.groq.test/openai/v1/chat/completions';
     process.env.TRACKERAI_CLOUD_AI_API_KEY = 'test-key';
-    process.env.TRACKERAI_CLOUD_REASONING_MODEL = 'qwen/qwen3-32b';
+    process.env.TRACKERAI_CLOUD_REASONING_MODEL = 'qwen/qwen3.8-27b';
     process.env.TRACKERAI_CLOUD_DEEP_REASONING_MODEL = 'openai/gpt-oss-120b';
     process.env.TRACKERAI_CLOUD_FALLBACK_REASONING_MODEL = 'openai/gpt-oss-20b';
     resetConfig();
@@ -64,7 +64,7 @@ describe('trackerai-cloud-ai', () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({
-        model: 'qwen/qwen3-32b',
+        model: 'qwen/qwen3.8-27b',
         choices: [{ message: { content: 'Standard answer.' } }],
       }),
     }));

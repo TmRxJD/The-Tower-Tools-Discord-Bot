@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mockAppConfig = {
   ai: {
     cloudEndpoint: 'https://api.groq.test/openai/v1/chat/completions',
-    cloudReasoningModel: 'qwen/qwen3-32b',
+    cloudReasoningModel: 'qwen/qwen3.8-27b',
     cloudFallbackReasoningModel: 'openai/gpt-oss-20b',
   },
 };
@@ -13,7 +13,7 @@ const mockBotConfig = {
     eightBall: {
       ai: {
         endpoint: 'https://api.groq.com/openai/v1/chat/completions',
-        model: 'qwen/qwen3-32b',
+        model: 'qwen/qwen3.8-27b',
         maxTokens: 100,
         temperature: 0.9,
         timeoutMs: 15000,
@@ -36,7 +36,7 @@ import { getEightBallAiResponse } from './eight-ball-ai';
 describe('eight-ball-ai', () => {
   beforeEach(() => {
     mockAppConfig.ai.cloudEndpoint = 'https://api.groq.test/openai/v1/chat/completions';
-    mockAppConfig.ai.cloudReasoningModel = 'qwen/qwen3-32b';
+    mockAppConfig.ai.cloudReasoningModel = 'qwen/qwen3.8-27b';
     mockAppConfig.ai.cloudFallbackReasoningModel = 'openai/gpt-oss-20b';
   });
 
@@ -61,7 +61,7 @@ describe('eight-ball-ai', () => {
     const [url, init] = firstCall as unknown as [string, RequestInit];
     expect(url).toBe('https://api.groq.test/openai/v1/chat/completions');
     const body = JSON.parse(String(init.body)) as { model: string; max_tokens: number };
-    expect(body.model).toBe('qwen/qwen3-32b');
+    expect(body.model).toBe('qwen/qwen3.8-27b');
     expect(body.max_tokens).toBe(100);
   });
 
@@ -86,7 +86,7 @@ describe('eight-ball-ai', () => {
 
     const firstBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body || '{}')) as { model: string };
     const secondBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body || '{}')) as { model: string };
-    expect(firstBody.model).toBe('qwen/qwen3-32b');
+    expect(firstBody.model).toBe('qwen/qwen3.8-27b');
     expect(secondBody.model).toBe('openai/gpt-oss-20b');
   });
 
@@ -107,7 +107,7 @@ describe('eight-ball-ai', () => {
     const [url, init] = firstCall as unknown as [string, RequestInit];
     expect(url).toBe('https://api.groq.test/openai/v1/responses');
     const body = JSON.parse(String(init.body)) as { model: string; max_output_tokens: number; input: Array<{ role: string }> };
-    expect(body.model).toBe('qwen/qwen3-32b');
+    expect(body.model).toBe('qwen/qwen3.8-27b');
     expect(body.max_output_tokens).toBe(100);
     expect(body.input.map(item => item.role)).toEqual(['system', 'user']);
   });

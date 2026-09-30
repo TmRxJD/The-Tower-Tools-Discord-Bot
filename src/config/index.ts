@@ -216,7 +216,7 @@ export function loadConfig(): AppConfig {
     ai: {
       cloudApiKey: parsed.TRACKERAI_CLOUD_AI_API_KEY,
       cloudEndpoint: parsed.TRACKERAI_CLOUD_AI_ENDPOINT,
-      cloudReasoningModel: firstNonEmpty(parsed.TRACKERAI_CLOUD_REASONING_MODEL) ?? 'qwen/qwen3-32b',
+      cloudReasoningModel: firstNonEmpty(parsed.TRACKERAI_CLOUD_REASONING_MODEL) ?? 'qwen/qwen3.8-27b',
       cloudDeepReasoningModel: firstNonEmpty(parsed.TRACKERAI_CLOUD_DEEP_REASONING_MODEL),
       cloudFallbackReasoningModel: firstNonEmpty(parsed.TRACKERAI_CLOUD_FALLBACK_REASONING_MODEL),
     },
