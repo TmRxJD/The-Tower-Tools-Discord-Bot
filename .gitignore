@@ -55,3 +55,6 @@ coverage/
 
 # harness command output (charts, etc.)
 test-harness/out/
+
+# Local runtime state (last-registered slash command hash, caches)
+.data/
