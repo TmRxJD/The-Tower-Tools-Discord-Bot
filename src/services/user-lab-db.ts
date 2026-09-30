@@ -110,15 +110,15 @@ async function loadLocalUserLabSettings(userId: string): Promise<{ state: UserLa
 }
 
 async function saveLocalUserLabSettings(userId: string, settings: UserLabSettings): Promise<void> {
+  // sqlite is the durable copy (RxDB is in memory on Node), so it is always written and RxDB is a cache on top.
+  await saveLocalUserLabSettingsLegacySqlite(userId, settings);
+
   try {
     const { saveLabSettingsToRxDB } = await import('../rxdb/user-state-rxdb-store.js');
     await saveLabSettingsToRxDB(userId, settings);
-    return;
   } catch (error) {
-    logger.warn('[lab-settings] RxDB write failed; falling back to legacy sqlite', { userId, error });
+    logger.warn('[lab-settings] RxDB write failed; sqlite copy is saved', { userId, error });
   }
-
-  await saveLocalUserLabSettingsLegacySqlite(userId, settings);
 }
 
 export async function getUserLabSettings(userId: string, _context: LabCloudContext = {}): Promise<UserLabSettings> {

@@ -6,16 +6,16 @@ import {
   type UserLabSettings,
 } from '@tmrxjd/platform/tools';
 import { logger } from '../core/logger';
-import { getToolsBotDb, getToolsBotKv, setToolsBotKv } from '../services/idb';
+import { getToolsBotDb } from '../services/idb';
 import { getOrInitToolsUserStateRxDatabase } from './database-manager';
 import { bindToolsUserStateRxDBInboundSync } from './reactive-sync';
 import type { ToolsUserStateRxDatabase } from './init-database';
 
-const LEGACY_RXDB_SEED_MARKER_PREFIX = 'tools-rxdb-legacy-seeded:';
-
-function buildLegacySeedMarker(userId: string): string {
-  return `${LEGACY_RXDB_SEED_MARKER_PREFIX}${userId}`;
-}
+/**
+ * The Node RxDB engine keeps documents in memory, so the legacy sqlite rows stay the durable copy and
+ * are re-seeded into RxDB after every restart. Seeding is remembered per process only.
+ */
+const seededThisProcess = new Set<string>();
 
 export async function ensureToolsUserStateRxDatabase(userId: string): Promise<ToolsUserStateRxDatabase> {
   const db = await getOrInitToolsUserStateRxDatabase(userId);
@@ -61,19 +61,8 @@ async function readLegacyLabSettingsSqlite(userId: string): Promise<Record<strin
   };
 }
 
-async function clearLegacySharedSettingsSqlite(userId: string): Promise<void> {
-  const database = getToolsBotDb();
-  await database.sharedUserSettings.delete(userId);
-}
-
-async function clearLegacyLabSettingsSqlite(userId: string): Promise<void> {
-  const database = getToolsBotDb();
-  await database.labSettings.delete(userId);
-}
-
 export async function seedToolsUserStateFromLegacyIfNeeded(userId: string): Promise<void> {
-  const seedMarker = buildLegacySeedMarker(userId);
-  if (await getToolsBotKv<boolean>(seedMarker).catch(() => null)) {
+  if (seededThisProcess.has(userId)) {
     return;
   }
 
@@ -84,7 +73,7 @@ export async function seedToolsUserStateFromLegacyIfNeeded(userId: string): Prom
   ]);
 
   if (sharedCount > 0 && labCount > 0) {
-    await setToolsBotKv(seedMarker, true).catch(() => {});
+    seededThisProcess.add(userId);
     return;
   }
 
@@ -103,7 +92,6 @@ export async function seedToolsUserStateFromLegacyIfNeeded(userId: string): Prom
         updatedAt,
         ...normalized,
       });
-      await clearLegacySharedSettingsSqlite(userId);
       seeded = true;
     }
   }
@@ -125,13 +113,12 @@ export async function seedToolsUserStateFromLegacyIfNeeded(userId: string): Prom
         updatedAt,
         ...normalized,
       });
-      await clearLegacyLabSettingsSqlite(userId);
       seeded = true;
     }
   }
 
   if (sharedCount > 0 || labCount > 0 || seeded) {
-    await setToolsBotKv(seedMarker, true).catch(() => {});
+    seededThisProcess.add(userId);
     if (seeded) {
       logger.info('[rxdb] seeded legacy sqlite user state into RxDB', { userId });
     }

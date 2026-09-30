@@ -1,5 +1,6 @@
 import type { RxCollection, RxDatabase, RxJsonSchema } from 'rxdb';
-import { createRxDatabase } from 'rxdb/plugins/core';
+import { addRxPlugin, createRxDatabase } from 'rxdb/plugins/core';
+import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
 import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie';
 import {
   toolsLabSettingsRxJsonSchema,
@@ -10,6 +11,9 @@ import {
 import { buildTrackerRunRxDatabaseName, ensureTrackerRunNodeRxDBStorage } from '@tmrxjd/platform/node';
 
 const RXDB_SCOPE_PREFIX = 'tools_bot_rxdb';
+
+// RxDB core refuses to create a collection unless the schema-migration plugin is registered.
+addRxPlugin(RxDBMigrationSchemaPlugin);
 
 export type ToolsSharedUserSettingsRxCollection = RxCollection<ToolsUserStateDocument>;
 export type ToolsLabSettingsRxCollection = RxCollection<ToolsUserStateDocument>;
@@ -36,8 +40,12 @@ export async function initToolsUserStateRxDatabase(scopeId: string): Promise<Too
 
   const db = await createRxDatabase({
     name: buildTrackerRunRxDatabaseName(RXDB_SCOPE_PREFIX, scopeId),
-    storage: getRxStorageDexie(),
-    ignoreDuplicate: true,
+    // Dexie reads the IndexedDB global once, when it loads, which is before the Node implementation is
+    // installed. Handing it the installed implementation explicitly is what lets it open at all.
+    storage: getRxStorageDexie({
+      indexedDB: (globalThis as { indexedDB?: IDBFactory }).indexedDB,
+      IDBKeyRange: (globalThis as { IDBKeyRange?: typeof IDBKeyRange }).IDBKeyRange,
+    }),
   }) as ToolsUserStateRxDatabase;
 
   await db.addCollections({

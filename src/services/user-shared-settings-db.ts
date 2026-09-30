@@ -77,15 +77,15 @@ async function loadLocalSharedSettings(userId: string): Promise<{ state: LocalSh
 }
 
 async function saveLocalSharedSettings(userId: string, settings: LocalSharedUserToolSettings): Promise<void> {
+  // sqlite is the durable copy (RxDB is in memory on Node), so it is always written and RxDB is a cache on top.
+  await saveLocalSharedSettingsLegacySqlite(userId, settings)
+
   try {
     const { saveSharedSettingsToRxDB } = await import('../rxdb/user-state-rxdb-store.js')
     await saveSharedSettingsToRxDB(userId, settings)
-    return
   } catch (error) {
-    logger.warn('[shared-settings] RxDB write failed; falling back to legacy sqlite', { userId, error })
+    logger.warn('[shared-settings] RxDB write failed; sqlite copy is saved', { userId, error })
   }
-
-  await saveLocalSharedSettingsLegacySqlite(userId, settings)
 }
 
 export async function getUserSharedSettings(userId: string): Promise<LocalSharedUserToolSettings> {
