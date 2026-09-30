@@ -200,4 +200,17 @@ describe('user cloud boundaries', () => {
     expect(updateDocumentMock).not.toHaveBeenCalled();
     expect(createDocumentMock).not.toHaveBeenCalled();
   });
+
+  it('accepts queued lab settings written before gemDiscount existed', async () => {
+    await saveUserLabSettingsCloud('user-1', {
+      labSpeed: 1,
+      labRelic: 1,
+      labDiscount: 1,
+      speedUp: 1,
+      hideMaxedLabs: true,
+      labLevels: {},
+    } as unknown as Parameters<typeof saveUserLabSettingsCloud>[1]);
+
+    expect(updateDocumentMock.mock.calls.length + createDocumentMock.mock.calls.length).toBeGreaterThan(0);
+  });
 });

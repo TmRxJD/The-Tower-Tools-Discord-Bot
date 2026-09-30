@@ -432,7 +432,8 @@ export async function saveUserLabSettingsCloud(userId: string, settings: UserLab
   }
 
   try {
-    const parsedSettings = normalizeLocalLabSettings(userLabSettingsSchema.parse(settings));
+    // Outbox payloads queued before gemDiscount became required lack it; default missing fields, still reject invalid ones.
+    const parsedSettings = normalizeLocalLabSettings(userLabSettingsSchema.parse({ ...DEFAULT_LAB_SETTINGS, ...settings }));
     const nowIso = new Date().toISOString();
     const candidates = await resolveCloudUserIdCandidates(userId, context);
     const discoveredAppwriteUserId = await resolveDiscoveredAppwriteUserId(context);
