@@ -3,7 +3,6 @@ import {
   battleConditionsBridgeEventSchema,
   battleConditionsBridgeHost,
   battleConditionsBridgePath,
-  battleConditionsBridgePort,
 } from '@tmrxjd/platform/tools';
 
 const deliverBattleConditionsRecordMock = vi.fn();
@@ -57,7 +56,10 @@ afterEach(() => {
 describe('battle conditions bridge server', () => {
   it('accepts a validated loopback payload and forwards it to delivery', async () => {
     deliverBattleConditionsRecordMock.mockResolvedValue({ delivered: 1, skipped: 0, failed: 0 });
-    startBattleConditionsBridgeServer({} as never);
+    // Port 0: the live bot on this host owns the fixed bridge port, and a test that shares it
+    // posts to the running bot instead of its own server.
+    const port = await startBattleConditionsBridgeServer({} as never, { port: 0 });
+    expect(port).toEqual(expect.any(Number));
 
     const payload = battleConditionsBridgeEventSchema.parse({
       event: 'battle_conditions.updated',
@@ -65,7 +67,7 @@ describe('battle conditions bridge server', () => {
       record: sampleRecord,
     });
 
-    const response = await fetch(`http://${battleConditionsBridgeHost}:${battleConditionsBridgePort}${battleConditionsBridgePath}`, {
+    const response = await fetch(`http://${battleConditionsBridgeHost}:${port}${battleConditionsBridgePath}`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',

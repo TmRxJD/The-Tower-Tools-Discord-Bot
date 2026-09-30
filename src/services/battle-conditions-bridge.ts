@@ -12,6 +12,7 @@ import { deliverBattleConditionsRecord } from './battle-conditions-delivery';
 const MAX_BODY_BYTES = 256 * 1024;
 
 let server: Server | null = null;
+let boundPort: number | null = null;
 
 function isLoopbackRequest(request: IncomingMessage): boolean {
   const remoteAddress = request.socket.remoteAddress;
@@ -75,25 +76,50 @@ async function handleRequest(client: ToolsBotClient, request: IncomingMessage, r
   }
 }
 
-export function startBattleConditionsBridgeServer(client: ToolsBotClient): void {
+export interface BattleConditionsBridgeOptions {
+  /** Defaults to the platform's fixed bridge port; tests pass 0 to get a free one. */
+  port?: number;
+}
+
+/**
+ * Starts the loopback bridge. Resolves with the port actually bound, which differs from the
+ * configured one only when the caller asked for an ephemeral port. Callers that do not need
+ * the port can ignore the promise: a bind failure is logged, not thrown.
+ */
+export function startBattleConditionsBridgeServer(
+  client: ToolsBotClient,
+  options: BattleConditionsBridgeOptions = {},
+): Promise<number | null> {
   if (server) {
-    return;
+    return Promise.resolve(boundPort);
   }
 
-  server = createServer((request, response) => {
+  const port = options.port ?? battleConditionsBridgePort;
+  const created = createServer((request, response) => {
     void handleRequest(client, request, response);
   });
+  server = created;
 
-  server.listen(battleConditionsBridgePort, battleConditionsBridgeHost, () => {
-    logger.info('Battle conditions bridge server started', {
-      host: battleConditionsBridgeHost,
-      port: battleConditionsBridgePort,
-      path: battleConditionsBridgePath,
+  return new Promise((resolve) => {
+    created.once('error', error => {
+      logger.error('Battle conditions bridge server failed', error);
+      if (server === created) {
+        server = null;
+        boundPort = null;
+      }
+      resolve(null);
     });
-  });
 
-  server.on('error', error => {
-    logger.error('Battle conditions bridge server failed', error);
+    created.listen(port, battleConditionsBridgeHost, () => {
+      const address = created.address();
+      boundPort = typeof address === 'object' && address ? address.port : port;
+      logger.info('Battle conditions bridge server started', {
+        host: battleConditionsBridgeHost,
+        port: boundPort,
+        path: battleConditionsBridgePath,
+      });
+      resolve(boundPort);
+    });
   });
 }
 
@@ -104,4 +130,5 @@ export function stopBattleConditionsBridgeServer(): void {
 
   server.close();
   server = null;
+  boundPort = null;
 }

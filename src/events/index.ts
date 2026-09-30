@@ -11,7 +11,7 @@ export function registerEvents(client: ToolsBotClient) {
   client.once(Events.ClientReady, readyClient => {
     logger.info(`Ready! Logged in as ${readyClient.user.tag}`);
     startReminderScheduler(client);
-    startBattleConditionsBridgeServer(client);
+    void startBattleConditionsBridgeServer(client);
     startBattleConditionsScheduler(client);
     startCloudSyncOutboxDrainScheduler();
     // Re-arm end timers for giveaways that were still active at shutdown; without
