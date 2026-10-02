@@ -1,0 +1,135 @@
+diff --git a/dist/tools/battle-conditions.d.ts b/dist/tools/battle-conditions.d.ts
+index f04048130cef01661d1d5e4ed7f83a87079d7c4d..d6dd926cdc3cfaea3cbde79af887e28979f66648 100644
+--- a/dist/tools/battle-conditions.d.ts
++++ b/dist/tools/battle-conditions.d.ts
+@@ -12,6 +12,7 @@ export declare const battleConditionsRankSchema: z.ZodEnum<{
+     plat: "plat";
+     gold: "gold";
+     silver: "silver";
++    mythic: "mythic";
+ }>;
+ export type BattleConditionsRank = z.infer<typeof battleConditionsRankSchema>;
+ export declare const battleConditionsRankOrAllSchema: z.ZodEnum<{
+@@ -21,6 +22,7 @@ export declare const battleConditionsRankOrAllSchema: z.ZodEnum<{
+     plat: "plat";
+     gold: "gold";
+     silver: "silver";
++    mythic: "mythic";
+ }>;
+ export type BattleConditionsRankOrAll = z.infer<typeof battleConditionsRankOrAllSchema>;
+ export declare const battleConditionsRankOrder: BattleConditionsRank[];
+@@ -38,6 +40,7 @@ export declare const battleConditionsChannelMapSchema: z.ZodObject<{
+     plat: z.ZodOptional<z.ZodString>;
+     gold: z.ZodOptional<z.ZodString>;
+     silver: z.ZodOptional<z.ZodString>;
++    mythic: z.ZodOptional<z.ZodString>;
+ }, z.core.$strict>;
+ export type BattleConditionsChannelMap = z.infer<typeof battleConditionsChannelMapSchema>;
+ export declare const battleConditionsDeliveredDatesSchema: z.ZodObject<{
+@@ -46,6 +49,7 @@ export declare const battleConditionsDeliveredDatesSchema: z.ZodObject<{
+     plat: z.ZodOptional<z.ZodString>;
+     gold: z.ZodOptional<z.ZodString>;
+     silver: z.ZodOptional<z.ZodString>;
++    mythic: z.ZodOptional<z.ZodString>;
+ }, z.core.$strict>;
+ export type BattleConditionsDeliveredDates = z.infer<typeof battleConditionsDeliveredDatesSchema>;
+ export declare const battleConditionsDeliveredUpdatedAtSchema: z.ZodObject<{
+@@ -54,6 +58,7 @@ export declare const battleConditionsDeliveredUpdatedAtSchema: z.ZodObject<{
+     plat: z.ZodOptional<z.ZodNumber>;
+     gold: z.ZodOptional<z.ZodNumber>;
+     silver: z.ZodOptional<z.ZodNumber>;
++    mythic: z.ZodOptional<z.ZodNumber>;
+ }, z.core.$strict>;
+ export type BattleConditionsDeliveredUpdatedAt = z.infer<typeof battleConditionsDeliveredUpdatedAtSchema>;
+ export declare const battleConditionsSubscriptionSchema: z.ZodObject<{
+@@ -64,6 +69,7 @@ export declare const battleConditionsSubscriptionSchema: z.ZodObject<{
+         plat: z.ZodOptional<z.ZodString>;
+         gold: z.ZodOptional<z.ZodString>;
+         silver: z.ZodOptional<z.ZodString>;
++        mythic: z.ZodOptional<z.ZodString>;
+     }, z.core.$strict>;
+     deliveredTournamentDates: z.ZodDefault<z.ZodObject<{
+         legends: z.ZodOptional<z.ZodString>;
+@@ -71,6 +77,7 @@ export declare const battleConditionsSubscriptionSchema: z.ZodObject<{
+         plat: z.ZodOptional<z.ZodString>;
+         gold: z.ZodOptional<z.ZodString>;
+         silver: z.ZodOptional<z.ZodString>;
++        mythic: z.ZodOptional<z.ZodString>;
+     }, z.core.$strict>>;
+     deliveredSourceUpdatedAt: z.ZodDefault<z.ZodObject<{
+         legends: z.ZodOptional<z.ZodNumber>;
+@@ -78,6 +85,7 @@ export declare const battleConditionsSubscriptionSchema: z.ZodObject<{
+         plat: z.ZodOptional<z.ZodNumber>;
+         gold: z.ZodOptional<z.ZodNumber>;
+         silver: z.ZodOptional<z.ZodNumber>;
++        mythic: z.ZodOptional<z.ZodNumber>;
+     }, z.core.$strict>>;
+     updatedAt: z.ZodNumber;
+ }, z.core.$strict>;
+@@ -92,6 +100,7 @@ export declare const battleConditionsSchedulerStateSchema: z.ZodObject<{
+         plat: z.ZodOptional<z.ZodString>;
+         gold: z.ZodOptional<z.ZodString>;
+         silver: z.ZodOptional<z.ZodString>;
++        mythic: z.ZodOptional<z.ZodString>;
+     }, z.core.$strict>>;
+     updatedAt: z.ZodNumber;
+ }, z.core.$strict>;
+@@ -138,6 +147,7 @@ export declare const battleConditionsMessageDataSchema: z.ZodObject<{
+         plat: "plat";
+         gold: "gold";
+         silver: "silver";
++        mythic: "mythic";
+     }>;
+ }, z.core.$strict>;
+ export type BattleConditionsMessageData = z.infer<typeof battleConditionsMessageDataSchema>;
+@@ -190,6 +200,7 @@ export declare const battleConditionsBridgeEventSchema: z.ZodObject<{
+             plat: "plat";
+             gold: "gold";
+             silver: "silver";
++            mythic: "mythic";
+         }>;
+     }, z.core.$strict>;
+ }, z.core.$strict>;
+diff --git a/dist/tools/battle-conditions.js b/dist/tools/battle-conditions.js
+index 391f697f96338f08eef686128f254ea44ee3fbb8..5cf358e0ffdea1e9f1e7247a76c08a84771e37ea 100644
+--- a/dist/tools/battle-conditions.js
++++ b/dist/tools/battle-conditions.js
+@@ -14,10 +14,11 @@ exports.battleConditionsBridgePort = 43127;
+ exports.battleConditionsBridgePath = '/internal/battle-conditions';
+ /** Push bridge is primary; scheduler polls Appwrite only as a fallback. */
+ exports.battleConditionsSchedulerFallbackIntervalMs = 15 * 60 * 1000;
+-exports.battleConditionsRankSchema = zod_1.z.enum(['legends', 'champ', 'plat', 'gold', 'silver']);
+-exports.battleConditionsRankOrAllSchema = zod_1.z.enum(['legends', 'champ', 'plat', 'gold', 'silver', 'all']);
+-exports.battleConditionsRankOrder = ['legends', 'champ', 'plat', 'gold', 'silver'];
++exports.battleConditionsRankSchema = zod_1.z.enum(['legends', 'champ', 'plat', 'gold', 'silver', 'mythic']);
++exports.battleConditionsRankOrAllSchema = zod_1.z.enum(['legends', 'champ', 'plat', 'gold', 'silver', 'mythic', 'all']);
++exports.battleConditionsRankOrder = ['legends', 'champ', 'plat', 'gold', 'silver', 'mythic'];
+ exports.battleConditionsRankConfigByRank = {
++    mythic: { rank: 'mythic', label: 'Mythic', title: 'Mythic League Battle Conditions', collectionId: 'mythic', sourceChannelId: '1542575039814312026', embedColor: 15844367 },
+     legends: {
+         rank: 'legends',
+         label: 'Legends',
+@@ -65,6 +66,7 @@ exports.battleConditionsChannelMapSchema = zod_1.z.object({
+     plat: zod_1.z.string().min(1).optional(),
+     gold: zod_1.z.string().min(1).optional(),
+     silver: zod_1.z.string().min(1).optional(),
++    mythic: zod_1.z.string().min(1).optional(),
+ }).strict();
+ exports.battleConditionsDeliveredDatesSchema = zod_1.z.object({
+     legends: zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+@@ -72,6 +74,7 @@ exports.battleConditionsDeliveredDatesSchema = zod_1.z.object({
+     plat: zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+     gold: zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+     silver: zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
++    mythic: zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+ }).strict();
+ exports.battleConditionsDeliveredUpdatedAtSchema = zod_1.z.object({
+     legends: zod_1.z.number().int().nonnegative().optional(),
+@@ -79,6 +82,7 @@ exports.battleConditionsDeliveredUpdatedAtSchema = zod_1.z.object({
+     plat: zod_1.z.number().int().nonnegative().optional(),
+     gold: zod_1.z.number().int().nonnegative().optional(),
+     silver: zod_1.z.number().int().nonnegative().optional(),
++    mythic: zod_1.z.number().int().nonnegative().optional(),
+ }).strict();
+ exports.battleConditionsSubscriptionSchema = zod_1.z.object({
+     guildId: zod_1.z.string().min(1),

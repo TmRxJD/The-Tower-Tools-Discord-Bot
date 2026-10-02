@@ -21,7 +21,7 @@ import {
 import { deliverBattleConditionsRecords } from './battle-conditions-delivery';
 
 let interval: NodeJS.Timeout | null = null;
-type LocalBattleConditionsRank = 'legends' | 'champ' | 'plat' | 'gold' | 'silver';
+type LocalBattleConditionsRank = 'legends' | 'champ' | 'plat' | 'gold' | 'silver' | 'mythic';
 type LocalBattleConditionsDeliveredDates = Partial<Record<LocalBattleConditionsRank, string | undefined>>;
 
 async function loadFreshRecords(requiredRanks: LocalBattleConditionsRank[], startMs: number): Promise<Partial<Record<LocalBattleConditionsRank, BattleConditionsRecord>>> {

@@ -11,7 +11,7 @@ import { getToolsBotDb } from './idb';
 
 const SCHEDULER_STATE_ID = 'global';
 
-type LocalBattleConditionsRank = 'legends' | 'champ' | 'plat' | 'gold' | 'silver';
+type LocalBattleConditionsRank = 'legends' | 'champ' | 'plat' | 'gold' | 'silver' | 'mythic';
 type LocalBattleConditionsRankOrAll = LocalBattleConditionsRank | 'all';
 type LocalBattleConditionsSubscription = {
   guildId: string;
@@ -32,6 +32,7 @@ type LocalBattleConditionsSchedulerState = {
 function normalizeBattleConditionsEnabledMap(input: unknown): Partial<Record<LocalBattleConditionsRank, boolean | undefined>> {
   const typedInput = (input && typeof input === 'object') ? input as Record<string, unknown> : {};
   return {
+    mythic: typeof typedInput.mythic === 'boolean' ? typedInput.mythic : undefined,
     legends: typeof typedInput.legends === 'boolean' ? typedInput.legends : undefined,
     champ: typeof typedInput.champ === 'boolean' ? typedInput.champ : undefined,
     plat: typeof typedInput.plat === 'boolean' ? typedInput.plat : undefined,
@@ -109,12 +110,14 @@ export async function updateBattleConditionsSubscriptionSettings(input: {
 
   if (input.rank === 'all') {
     if (input.channelId !== undefined) {
+      channels.mythic = input.channelId;
       channels.legends = input.channelId;
       channels.champ = input.channelId;
       channels.plat = input.channelId;
       channels.gold = input.channelId;
       channels.silver = input.channelId;
     }
+    enabled.mythic = input.enabled;
     enabled.legends = input.enabled;
     enabled.champ = input.enabled;
     enabled.plat = input.enabled;

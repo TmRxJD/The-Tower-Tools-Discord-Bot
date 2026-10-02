@@ -5,7 +5,7 @@ import { EmbedBuilder } from 'discord.js';
 import type { BattleConditionsRecord } from './battle-conditions-cloud';
 
 const SLOT_OPEN_MINUTE_UTC = 0;
-type LocalBattleConditionsRank = 'legends' | 'champ' | 'plat' | 'gold' | 'silver';
+type LocalBattleConditionsRank = 'legends' | 'champ' | 'plat' | 'gold' | 'silver' | 'mythic';
 type LocalBattleConditionsEnabledMap = Partial<Record<LocalBattleConditionsRank, boolean | undefined>>;
 
 export interface BattleConditionsWindow {

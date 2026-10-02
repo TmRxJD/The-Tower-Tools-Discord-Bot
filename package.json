@@ -71,8 +71,8 @@
     "node-appwrite": "17.2.0",
     "rxdb": "17.1.0",
     "sqlite3": "^5.1.7",
-    "zod": "^4.3.6",
-    "thetowersdk": "^0.10.0"
+    "thetowersdk": "^0.10.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
@@ -93,6 +93,9 @@
       "@napi-rs/canvas",
       "canvas",
       "sqlite3"
-    ]
+    ],
+    "patchedDependencies": {
+      "@tmrxjd/platform@0.2.4": "patches/@tmrxjd__platform@0.2.4.patch"
+    }
   }
 }

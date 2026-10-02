@@ -1,3 +1,4 @@
+import { createShutdownCleanup } from './core/shutdown';
 import { createHash } from 'node:crypto';
 import { GatewayIntentBits } from 'discord.js';
 import { loadConfig, getAppConfig } from './config';
@@ -40,26 +41,22 @@ async function bootstrap() {
   const releaseInstanceLock = await acquireSingleInstanceLock();
   const tokenLockKey = createHash('sha256').update(appConfig.discord.token).digest('hex').slice(0, 16);
   const releaseSharedTokenLock = await acquireSharedDiscordTokenLock(tokenLockKey, `A local Discord bot process using client ${appConfig.discord.clientId}`);
-  let cleanupStarted = false;
-
-  const cleanup = async (reason: string, error?: unknown) => {
-    if (cleanupStarted) {
-      return;
-    }
-
-    cleanupStarted = true;
-    stopReminderScheduler();
-    stopBattleConditionsBridgeServer();
-    stopBattleConditionsScheduler();
-    stopCloudSyncOutboxDrainScheduler();
-    if (error) {
-      logger.error(`ToolsBot shutting down after ${reason}`, error);
-      process.exitCode = 1;
-    }
-
-    await releaseSharedTokenLock().catch(() => null);
-    await releaseInstanceLock().catch(() => null);
-  };
+  let client: ToolsBotClient | undefined;
+  const cleanup = createShutdownCleanup({
+    destroy: async () => {
+      stopReminderScheduler();
+      stopBattleConditionsBridgeServer();
+      stopBattleConditionsScheduler();
+      stopCloudSyncOutboxDrainScheduler();
+      await client?.destroy();
+    },
+    releaseLocks: async () => {
+      await releaseSharedTokenLock().catch(() => null);
+      await releaseInstanceLock().catch(() => null);
+    },
+    report: (reason, error) => { if (error) logger.error('ToolsBot shutting down after ' + reason, error); },
+    exit: code => process.exit(code),
+  });
 
   registerShutdownHandlers(cleanup);
 
@@ -71,7 +68,7 @@ async function bootstrap() {
     logger.info('ToolsBot sqlite storage initialized', storageStatus);
     void prewarmTrackerAiAskRuntime();
 
-    const client = new ToolsBotClient(
+    client = new ToolsBotClient(
       {
         intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
       },
@@ -88,9 +85,6 @@ async function bootstrap() {
 
     await startup.client.login(startup.runtime.loginToken);
 
-    startup.client.once('shardDisconnect', () => {
-      void cleanup('shardDisconnect');
-    });
   } catch (error) {
     await cleanup('bootstrap failure', error);
     throw error;
@@ -99,5 +93,5 @@ async function bootstrap() {
 
 void bootstrap().catch(error => {
   logger.error('Failed to bootstrap tools bot', error);
-  process.exitCode = 1;
+  process.exit(1);
 });

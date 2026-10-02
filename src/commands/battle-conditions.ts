@@ -51,7 +51,7 @@ function getBattleConditionsSendPermission(type: ChannelType): bigint {
     : PermissionFlagsBits.SendMessages;
 }
 
-type LocalBattleConditionsRank = 'legends' | 'champ' | 'plat' | 'gold' | 'silver';
+type LocalBattleConditionsRank = 'legends' | 'champ' | 'plat' | 'gold' | 'silver' | 'mythic';
 type LocalBattleConditionsRankOrAll = LocalBattleConditionsRank | 'all';
 
 function isBattleConditionsModerator(permissions: Readonly<{ has: (permission: bigint) => boolean }> | null | undefined): boolean {
