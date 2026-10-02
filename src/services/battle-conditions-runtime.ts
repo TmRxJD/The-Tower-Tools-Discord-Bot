@@ -4,7 +4,7 @@ import {
 import { EmbedBuilder } from 'discord.js';
 import type { BattleConditionsRecord } from './battle-conditions-cloud';
 
-const SLOT_OPEN_MINUTE_UTC = 1;
+const SLOT_OPEN_MINUTE_UTC = 0;
 type LocalBattleConditionsRank = 'legends' | 'champ' | 'plat' | 'gold' | 'silver';
 type LocalBattleConditionsEnabledMap = Partial<Record<LocalBattleConditionsRank, boolean | undefined>>;
 
@@ -16,10 +16,6 @@ export interface BattleConditionsWindow {
 
 export function getActiveBattleConditionsWindow(now = Date.now()): BattleConditionsWindow | null {
   const date = new Date(now);
-  const day = date.getUTCDay();
-  if (day !== 1 && day !== 4) {
-    return null;
-  }
 
   const startMs = Date.UTC(
     date.getUTCFullYear(),
@@ -75,7 +71,7 @@ export function isBattleConditionsRecordFreshForWindow(record: BattleConditionsR
     return false;
   }
 
-  return record.sourceMessageUpdatedAt >= window.startMs;
+  return record.tournamentTimestamp >= window.startMs;
 }
 
 export function buildBattleConditionsEmbed(record: BattleConditionsRecord): EmbedBuilder {

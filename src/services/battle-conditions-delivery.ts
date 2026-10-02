@@ -27,11 +27,12 @@ function hasDeliveredCurrentRecord(
 ): boolean {
   const deliveredTournamentDate = subscription.deliveredTournamentDates[rank];
   const deliveredSourceUpdatedAt = subscription.deliveredSourceUpdatedAt[rank] ?? 0;
+  if (deliveredTournamentDate && deliveredTournamentDate > record.tournamentDate) return true;
   return deliveredTournamentDate === record.tournamentDate
     && deliveredSourceUpdatedAt >= record.sourceMessageUpdatedAt;
 }
 
-export async function deliverBattleConditionsRecords(
+async function runDelivery(
   client: ToolsBotClient,
   records: Partial<Record<LocalBattleConditionsRank, BattleConditionsRecord | undefined>>,
 ): Promise<BattleConditionsDeliverySummary> {
@@ -72,10 +73,12 @@ export async function deliverBattleConditionsRecords(
             tournamentDate: record.tournamentDate,
             sourceMessageUpdatedAt: record.sourceMessageUpdatedAt,
           });
+          logger.warn('Battle conditions delivery confirmed', { guildId: subscription.guildId, channelId, rank, tournamentDate: record.tournamentDate, sourceUpdatedAt: record.sourceMessageUpdatedAt, messageId: sent.messageId });
           summary.delivered += 1;
           continue;
         }
 
+        logger.warn('Battle conditions delivery target unavailable', { guildId: subscription.guildId, channelId, rank, reason: sent.reason });
         summary.failed += 1;
       } catch (error) {
         summary.failed += 1;
@@ -90,6 +93,17 @@ export async function deliverBattleConditionsRecords(
   }
 
   return summary;
+}
+
+// Serialize bridge and fallback delivery so both re-read receipts after the prior send.
+let deliveryTail: Promise<unknown> = Promise.resolve();
+export function deliverBattleConditionsRecords(
+  client: ToolsBotClient,
+  records: Partial<Record<LocalBattleConditionsRank, BattleConditionsRecord | undefined>>,
+): Promise<BattleConditionsDeliverySummary> {
+  const next = deliveryTail.then(() => runDelivery(client, records));
+  deliveryTail = next.catch(() => {});
+  return next;
 }
 
 export async function deliverBattleConditionsRecord(

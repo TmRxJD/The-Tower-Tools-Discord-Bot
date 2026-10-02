@@ -95,3 +95,22 @@ describe('battle conditions delivery', () => {
     });
   });
 });
+it('rejects an older tournament after a newer date was delivered', async () => {
+  listBattleConditionsSubscriptionsMock.mockResolvedValue([{ guildId: 'guild-1', channels: { legends: 'channel-1' }, enabled: {}, deliveredTournamentDates: { legends: '2026-06-08' }, deliveredSourceUpdatedAt: {}, updatedAt: 1 }]);
+  expect(await deliverBattleConditionsRecord({} as never, sampleRecord)).toEqual({ delivered: 0, skipped: 1, failed: 0 });
+  expect(sendBattleConditionsRecordToChannelMock).not.toHaveBeenCalled();
+});
+it('serializes concurrent bridge/poll delivery and re-reads confirmed receipts', async () => {
+  const subscription = { guildId: 'guild-1', channels: { legends: 'channel-1' }, enabled: {}, deliveredTournamentDates: {} as Record<string,string>, deliveredSourceUpdatedAt: {} as Record<string,number>, updatedAt: 1 };
+  listBattleConditionsSubscriptionsMock.mockImplementation(async () => [structuredClone(subscription)]);
+  markBattleConditionsDeliveredMock.mockImplementation(async () => { subscription.deliveredTournamentDates.legends = sampleRecord.tournamentDate; subscription.deliveredSourceUpdatedAt.legends = sampleRecord.sourceMessageUpdatedAt; });
+  const results = await Promise.all([deliverBattleConditionsRecord({} as never, sampleRecord), deliverBattleConditionsRecord({} as never, sampleRecord)]);
+  expect(results.map(r => r.delivered)).toEqual([1, 0]);
+  expect(sendBattleConditionsRecordToChannelMock).toHaveBeenCalledTimes(1);
+});
+it('never records success for a failed send', async () => {
+  listBattleConditionsSubscriptionsMock.mockResolvedValue([{ guildId: 'guild-1', channels: { legends: 'channel-1' }, enabled: {}, deliveredTournamentDates: {}, deliveredSourceUpdatedAt: {}, updatedAt: 1 }]);
+  sendBattleConditionsRecordToChannelMock.mockResolvedValue({ ok: false, reason: 'missing-permissions' });
+  expect((await deliverBattleConditionsRecord({} as never, sampleRecord)).failed).toBe(1);
+  expect(markBattleConditionsDeliveredMock).not.toHaveBeenCalled();
+});

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { ChannelType, PermissionFlagsBits, type APIEmbed, type GuildTextBasedChannel, type MessageCreateOptions } from 'discord.js';
 import type { ToolsBotClient } from '../core/tools-bot-client';
 import type { BattleConditionsRecord } from './battle-conditions-cloud';
@@ -5,7 +6,7 @@ import type { BattleConditionsRecord } from './battle-conditions-cloud';
 export type BattleConditionsSourcePayload = Pick<MessageCreateOptions, 'content' | 'embeds' | 'files' | 'allowedMentions'>;
 type BattleConditionsForwardFile = { attachment: string; name?: string };
 export type SendBattleConditionsRecordResult =
-  | { ok: true }
+  | { ok: true; messageId: string }
   | { ok: false; reason: 'guild-unavailable' | 'channel-unavailable' | 'missing-permissions' | 'source-payload-unavailable' };
 
 function isAllowedBattleConditionsTargetChannelType(type: ChannelType): boolean {
@@ -197,6 +198,7 @@ export async function sendBattleConditionsRecordToChannel(
     return { ok: false, reason: 'source-payload-unavailable' };
   }
 
-  await (channel as GuildTextBasedChannel).send(forwardPayload);
-  return { ok: true };
+  const nonce = createHash('sha256').update([guildId, channelId, record.rank, record.tournamentDate, record.sourceMessageUpdatedAt].join(':')).digest('hex').slice(0, 24);
+  const message = await (channel as GuildTextBasedChannel).send({ ...forwardPayload, nonce, enforceNonce: true });
+  return { ok: true, messageId: message.id };
 }

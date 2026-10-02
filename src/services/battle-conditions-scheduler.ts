@@ -28,14 +28,14 @@ async function loadFreshRecords(requiredRanks: LocalBattleConditionsRank[], star
   const result: Partial<Record<LocalBattleConditionsRank, BattleConditionsRecord>> = {};
   for (const rank of requiredRanks) {
     const record = await getLatestBattleConditions(rank);
-    if (record && record.sourceMessageUpdatedAt >= startMs) {
+    if (record && record.tournamentTimestamp >= startMs) {
       result[rank] = record;
     }
   }
   return result;
 }
 
-async function checkAndSend(client: ToolsBotClient): Promise<void> {
+async function runCheckAndSend(client: ToolsBotClient): Promise<void> {
   const window = getActiveBattleConditionsWindow();
   if (!window) {
     return;
@@ -48,9 +48,7 @@ async function checkAndSend(client: ToolsBotClient): Promise<void> {
   }
 
   const schedulerState = await getBattleConditionsSchedulerState();
-  if (schedulerState.windowKey === window.windowKey && schedulerState.resolvedAt) {
-    return;
-  }
+  // Re-check versions even after resolution; later edits must not be missed.
 
   const records = await loadFreshRecords(configuredRanks, window.startMs);
   const lastSeenTournamentDates: LocalBattleConditionsDeliveredDates = { ...schedulerState.lastSeenTournamentDates };
@@ -70,6 +68,15 @@ async function checkAndSend(client: ToolsBotClient): Promise<void> {
     lastSeenTournamentDates,
     updatedAt: Date.now(),
   });
+}
+
+let activePass: Promise<void> | null = null;
+export function checkAndSend(client: ToolsBotClient): Promise<void> {
+  if (activePass) return activePass;
+  activePass = runCheckAndSend(client).catch(error => {
+    logger.warn('Battle conditions fallback polling failed; retrying next interval', error);
+  }).finally(() => { activePass = null; });
+  return activePass;
 }
 
 export function startBattleConditionsScheduler(client: ToolsBotClient): void {
