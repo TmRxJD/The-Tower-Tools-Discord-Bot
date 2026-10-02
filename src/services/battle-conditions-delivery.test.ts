@@ -114,3 +114,16 @@ it('never records success for a failed send', async () => {
   expect((await deliverBattleConditionsRecord({} as never, sampleRecord)).failed).toBe(1);
   expect(markBattleConditionsDeliveredMock).not.toHaveBeenCalled();
 });
+
+
+it.each(['legends', 'champ', 'plat', 'gold', 'silver', 'mythic'] as const)('delivers the next tournament once for %s, then permits a newer source edit', async rank => {
+  const subscription = { guildId: 'future-fixture', channels: { [rank]: 'isolated-channel' }, enabled: {}, deliveredTournamentDates: { [rank]: '2026-10-03' }, deliveredSourceUpdatedAt: { [rank]: 100 }, updatedAt: 1 };
+  const next = { ...sampleRecord, rank, id: '2026-10-07', tournamentDate: '2026-10-07', tournamentTimestamp: Date.parse('2026-10-07T00:00:00Z'), sourceMessageUpdatedAt: 200 };
+  listBattleConditionsSubscriptionsMock.mockImplementation(async () => [structuredClone(subscription)]);
+  markBattleConditionsDeliveredMock.mockImplementation(async (receipt: { tournamentDate: string; sourceMessageUpdatedAt: number }) => { subscription.deliveredTournamentDates[rank] = receipt.tournamentDate; subscription.deliveredSourceUpdatedAt[rank] = receipt.sourceMessageUpdatedAt; });
+  expect((await deliverBattleConditionsRecord({} as never, next)).delivered).toBe(1);
+  expect((await deliverBattleConditionsRecord({} as never, next)).skipped).toBe(1);
+  expect((await deliverBattleConditionsRecord({} as never, { ...next, sourceMessageUpdatedAt: 201 })).delivered).toBe(1);
+  expect((await deliverBattleConditionsRecord({} as never, { ...next, tournamentDate: '2026-10-03', sourceMessageUpdatedAt: 300 })).skipped).toBe(1);
+  expect(sendBattleConditionsRecordToChannelMock).toHaveBeenCalledTimes(2);
+});
