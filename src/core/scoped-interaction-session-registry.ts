@@ -43,6 +43,10 @@ function isScopedInteraction(
 export class ScopedInteractionSessionRegistry {
   private readonly sessions = new Map<string, ScopedInteractionSession>();
 
+  get size(): number {
+    return this.sessions.size;
+  }
+
   register(input: ScopedInteractionSessionRegistration) {
     this.pruneExpired();
     this.sessions.set(input.sessionId, {

@@ -19,6 +19,7 @@ import { createPersistence } from './persistence';
 import { prewarmTrackerAiAskRuntime } from './services/trackerai-ask';
 import { stopReminderScheduler } from './services/reminder-scheduler';
 import { stopCloudSyncOutboxDrainScheduler } from './services/cloud-sync-outbox-drain';
+import { stopMemoryTelemetry } from './services/memory-telemetry';
 
 function registerShutdownHandlers(cleanup: (reason: string, error?: unknown) => Promise<void>): void {
   process.once('SIGINT', () => {
@@ -44,6 +45,7 @@ async function bootstrap() {
   let client: ToolsBotClient | undefined;
   const cleanup = createShutdownCleanup({
     destroy: async () => {
+      stopMemoryTelemetry();
       stopReminderScheduler();
       stopBattleConditionsBridgeServer();
       stopBattleConditionsScheduler();

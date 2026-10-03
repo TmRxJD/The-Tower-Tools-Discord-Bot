@@ -4,6 +4,10 @@ import { initToolsUserStateRxDatabase } from './init-database';
 const databaseByScope = new Map<string, ToolsUserStateRxDatabase>();
 const initPromiseByScope = new Map<string, Promise<ToolsUserStateRxDatabase>>();
 
+export function getToolsUserStateDatabaseCounts(): { open: number; initializing: number } {
+  return { open: databaseByScope.size, initializing: initPromiseByScope.size };
+}
+
 export async function getOrInitToolsUserStateRxDatabase(scopeId: string): Promise<ToolsUserStateRxDatabase> {
   const normalizedScope = scopeId.trim();
   if (!normalizedScope) {

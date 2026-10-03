@@ -15,6 +15,10 @@ const KV_PREFIX = 'toolsbot:discord-appwrite-id:v1:';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const runtimeCache = new Map<string, string | null>();
 
+export function getDiscordIdentityCacheCount(): number {
+  return runtimeCache.size;
+}
+
 type CachedEntry = {
   appwriteId: string | null;
   cachedAt: number;

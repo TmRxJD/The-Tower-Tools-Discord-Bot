@@ -1,3 +1,9 @@
+## 2026-10-03 - Passive memory diagnostics
+
+- Capture numeric-only memory, Discord cache/listener/event counts, RxDB scopes/subscriptions, identity/session cache sizes, pending battle deliveries and KB artifact sizes every minute under natural workload.
+- Overwrite one small local snapshot atomically; remove the diagnostic listener and timer during shutdown. No user/message content or identifiers enter telemetry, and diagnostic I/O failures do not affect commands.
+- Privacy/lifecycle regressions and all 104 tests, full type checking, lint and build passed in isolation. Root cause remains unconfirmed; no additional owner notification or shared PM2 save was performed.
+
 ## 2026-10-03 - Heap exhaustion containment
 
 - Confirmed ToolsBot exhausted its approximately 4 GiB V8 heap after 27.7 hours; PM2 recovered automatically.

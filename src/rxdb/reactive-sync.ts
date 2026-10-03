@@ -9,6 +9,10 @@ export type ToolsUserStateInboundChangeHandler = (input: {
 const inboundHandlers = new Set<ToolsUserStateInboundChangeHandler>();
 const subscriptionsByUser = new Map<string, { unsubscribe: () => void }>();
 
+export function getToolsUserStateSubscriptionCount(): number {
+  return subscriptionsByUser.size;
+}
+
 export function registerToolsUserStateInboundChangeHandler(
   handler: ToolsUserStateInboundChangeHandler | null,
 ): void {

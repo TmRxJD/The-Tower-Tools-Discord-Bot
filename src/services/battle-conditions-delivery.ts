@@ -97,11 +97,19 @@ async function runDelivery(
 
 // Serialize bridge and fallback delivery so both re-read receipts after the prior send.
 let deliveryTail: Promise<unknown> = Promise.resolve();
+let pendingDeliveryPasses = 0;
+
+export function getPendingBattleConditionsDeliveryCount(): number {
+  return pendingDeliveryPasses;
+}
 export function deliverBattleConditionsRecords(
   client: ToolsBotClient,
   records: Partial<Record<LocalBattleConditionsRank, BattleConditionsRecord | undefined>>,
 ): Promise<BattleConditionsDeliverySummary> {
-  const next = deliveryTail.then(() => runDelivery(client, records));
+  pendingDeliveryPasses += 1;
+  const next = deliveryTail.then(() => runDelivery(client, records)).finally(() => {
+    pendingDeliveryPasses -= 1;
+  });
   deliveryTail = next.catch(() => {});
   return next;
 }
