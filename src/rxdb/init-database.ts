@@ -1,3 +1,4 @@
+import { enforceOptions } from 'broadcast-channel';
 import type { RxCollection, RxDatabase, RxJsonSchema } from 'rxdb';
 import { addRxPlugin, createRxDatabase } from 'rxdb/plugins/core';
 import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
@@ -27,6 +28,10 @@ let nodeStorageReady = false;
 
 function ensureToolsUserStateNodeStorage(): void {
   if (nodeStorageReady) return;
+  // The Node IndexedDB shim makes automatic broadcast selection choose browser polling.
+  // Its completed transactions remain retained; use the supported Node socket transport
+  // while preserving RxDB multi-instance change notifications and storage semantics.
+  enforceOptions({ type: 'node' });
   ensureTrackerRunNodeRxDBStorage({ dbFileName: 'tools-bot-user-state-rxdb.sqlite' });
   nodeStorageReady = true;
 }

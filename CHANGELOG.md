@@ -1,3 +1,9 @@
+## 2026-10-03 - RxDB idle broadcast memory leak
+
+- Select the supported Node socket broadcast transport before opening RxDB. The Node IndexedDB shim made automatic selection use browser IndexedDB polling; fake-indexeddb retained completed polling transactions indefinitely, even after channel close.
+- Keep Dexie storage, shared schemas, durable sqlite settings and RxDB multi-instance notifications unchanged. Pin broadcast-channel 7.3.0, matching the existing RxDB dependency; no dependency upgrade or internal monkeypatch.
+- An isolated two-database, three-minute control retained 2,305 additional transactions. Settled post-GC heap grew about 113 MiB/hour; the Node transport remained at 26 transactions with effectively flat heap. Regression coverage checks idle retention, settings writes, enabled multi-instance behavior and broadcast delivery; full 105 tests, type check, lint, build and offline frozen lockfile validation passed.
+- Retain the 1500 MiB RSS restart guard and bounded passive diagnostics. The original crashed heap was unavailable; the reproduced mechanism matches the later natural-workload growth, while full-day production stability remains to be observed.
 ## 2026-10-03 - Passive memory diagnostics
 
 - Capture numeric-only memory, Discord cache/listener/event counts, RxDB scopes/subscriptions, identity/session cache sizes, pending battle deliveries and KB artifact sizes every minute under natural workload.
