@@ -1,3 +1,7 @@
+## 2026-10-06 - Define response length
+
+- Keep slash and message-context definition responses within Discord's 2000-unit content limit. Long output includes a Unicode-safe preview and the complete original result in definition.txt; no definitions are discarded.
+- Defer the private message-context response before expansion, preserving existing slash public/private policy. Boundary, long Unicode and both command-path regressions passed.
 ## 2026-10-03 - RxDB idle broadcast memory leak
 
 - Select the supported Node socket broadcast transport before opening RxDB. The Node IndexedDB shim made automatic selection use browser IndexedDB polling; fake-indexeddb retained completed polling transactions indefinitely, even after channel close.
