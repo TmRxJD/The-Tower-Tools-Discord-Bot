@@ -1,3 +1,10 @@
+## 2026-10-06 - Lab collector acknowledgement safety
+
+- Acknowledge selectors, toggles and submitted modals before saving settings or rendering. Reuse each acknowledgement promise so failed or ambiguous callbacks are never retried.
+- Contain expired/already-acknowledged, network and unexpected failures in lab collector, reconciliation and cleanup tasks; keep unexpected diagnostics with callback URLs redacted.
+- Keep scoped session ownership through refreshes and release it when the collector ends, preventing a competing global callback.
+- Full isolated validation passed: 128 tests across 37 files, type checking, lint and build. Existing RxDB Node transport memory repair and 1500 MiB/15-second PM2 guard remain intact.
+
 ## 2026-10-06 - Define response length
 
 - Keep slash and message-context definition responses within Discord's 2000-unit content limit. Long output includes a Unicode-safe preview and the complete original result in definition.txt; no definitions are discarded.
