@@ -67,3 +67,17 @@ export async function writeRegistrationState(path: string, hash: string, command
   const state: RegistrationState = { hash, registeredAt: new Date().toISOString(), commandCount };
   await writeFile(path, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
 }
+
+/** Discord omits empty subcommand options arrays when returning a registered schema. */
+export function commandOptionsMatch(expected: unknown, actual: unknown): boolean {
+  function normalize(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(normalize);
+    if (value !== null && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+        .filter(([key, entry]) => !(key === 'options' && Array.isArray(entry) && entry.length === 0))
+        .map(([key, entry]) => [key, normalize(entry)]));
+    }
+    return value;
+  }
+  return hashCommandPayload([normalize(expected)], 'options') === hashCommandPayload([normalize(actual)], 'options');
+}

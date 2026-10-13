@@ -5,6 +5,7 @@ import { validateBotBootstrapConfig } from '../core/bootstrap-contract';
 import { logger } from '../core/logger';
 import {
   hashCommandPayload,
+  commandOptionsMatch,
   isRegistrationCurrent,
   registrationStatePath,
   writeRegistrationState,
@@ -90,7 +91,7 @@ async function registerCommands() {
     await rest.patch(Routes.applicationCommand(runtime.clientId, existing.id), { body: desired });
     const after = await rest.get(route) as Registered[];
     const updated = after.find(command => command.id === existing.id);
-    if (!updated || hashCommandPayload([{ options: updated.options }], 'readback') !== hashCommandPayload([{ options: desired.options }], 'readback')) {
+    if (!updated || !commandOptionsMatch(desired.options, updated.options)) {
       throw new Error('Command option readback mismatch');
     }
     const others = (commands: Registered[]) => commands.filter(command => command.id !== existing.id).sort((a, b) => a.id.localeCompare(b.id));

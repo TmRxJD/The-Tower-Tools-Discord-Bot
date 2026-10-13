@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   hashCommandPayload,
+  commandOptionsMatch,
   isRegistrationCurrent,
   readRegistrationState,
   registrationStatePath,
@@ -85,3 +86,15 @@ describe('registration state', () => {
     expect(JSON.parse(readFileSync(path, 'utf8')).hash).toBe('abc');
   });
 });
+
+ describe('commandOptionsMatch', () => {
+  it('accepts Discord omission of empty options and object key reordering', () => {
+    expect(commandOptionsMatch([{ name: 'export', type: 1, options: [] }], [{ type: 1, name: 'export' }])).toBe(true);
+  });
+  it('rejects missing, reordered or changed subcommands and options', () => {
+    const options = [{ name: 'all', type: 1 }, { name: 'export', type: 1 }];
+    expect(commandOptionsMatch(options, options.slice(0, 1))).toBe(false);
+    expect(commandOptionsMatch(options, [...options].reverse())).toBe(false);
+    expect(commandOptionsMatch(options, [{ name: 'all', type: 1 }, { name: 'export', type: 2 }])).toBe(false);
+  });
+ });
