@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import { Client, GatewayIntentBits, REST, Routes } from 'discord.js';
 import { getAppConfig, loadConfig } from '../config';
 import { validateBotBootstrapConfig } from '../core/bootstrap-contract';
@@ -89,11 +90,11 @@ async function registerCommands() {
     await rest.patch(Routes.applicationCommand(runtime.clientId, existing.id), { body: desired });
     const after = await rest.get(route) as Registered[];
     const updated = after.find(command => command.id === existing.id);
-    if (!updated || JSON.stringify(updated.options) !== JSON.stringify(desired.options)) {
+    if (!updated || hashCommandPayload([{ options: updated.options }], 'readback') !== hashCommandPayload([{ options: desired.options }], 'readback')) {
       throw new Error('Command option readback mismatch');
     }
     const others = (commands: Registered[]) => commands.filter(command => command.id !== existing.id).sort((a, b) => a.id.localeCompare(b.id));
-    if (JSON.stringify(others(before)) !== JSON.stringify(others(after))) throw new Error('Unrelated registration changed during update');
+    if (!isDeepStrictEqual(others(before), others(after))) throw new Error('Unrelated registration changed during update');
     console.log('Updated ' + desired.name + '; options verified by readback; ' + (after.length - 1) + ' unrelated global commands preserved. Guild registrations untouched.');
     return;
   }
