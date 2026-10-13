@@ -12,6 +12,7 @@ import {
 type RegisterCommandOptions = {
   deploymentMode?: 'dev' | 'prod';
   guildId?: string;
+  commandName?: string;
   /** Register even if the command payload matches the last successful registration. */
   force?: boolean;
 };
@@ -21,6 +22,11 @@ function parseRegisterCommandOptions(argv: string[]): RegisterCommandOptions {
   };
 
   for (const arg of argv) {
+    if (arg.startsWith('--command=')) {
+      options.commandName = arg.slice('--command='.length);
+      continue;
+    }
+
     if (arg === '--prod') {
       options.deploymentMode = 'prod';
       continue;
@@ -69,6 +75,28 @@ async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(runtime.loginToken);
   const body = commandModules.map(command => command.data);
   const isProd = runtime.deploymentMode === 'prod';
+
+  // Targeted production updates preserve every unrelated global and guild registration.
+  if (options.commandName) {
+    if (!isProd || options.guildId) throw new Error('--command requires production global registration');
+    const desired = body.find(command => command.name === options.commandName);
+    if (!desired) throw new Error('Unknown command name');
+    type Registered = { id: string; name: string; type: number; options?: unknown };
+    const route = Routes.applicationCommands(runtime.clientId);
+    const before = await rest.get(route) as Registered[];
+    const existing = before.find(command => command.name === desired.name && command.type === (desired.type ?? 1));
+    if (!existing) throw new Error('Target command is not registered; use full deployment for initial registration');
+    await rest.patch(Routes.applicationCommand(runtime.clientId, existing.id), { body: desired });
+    const after = await rest.get(route) as Registered[];
+    const updated = after.find(command => command.id === existing.id);
+    if (!updated || JSON.stringify(updated.options) !== JSON.stringify(desired.options)) {
+      throw new Error('Command option readback mismatch');
+    }
+    const others = (commands: Registered[]) => commands.filter(command => command.id !== existing.id).sort((a, b) => a.id.localeCompare(b.id));
+    if (JSON.stringify(others(before)) !== JSON.stringify(others(after))) throw new Error('Unrelated registration changed during update');
+    console.log('Updated ' + desired.name + '; options verified by readback; ' + (after.length - 1) + ' unrelated global commands preserved. Guild registrations untouched.');
+    return;
+  }
 
   const payloadHash = hashCommandPayload(body, `${runtime.clientId}:${runtime.deploymentMode}`);
   const statePath = registrationStatePath(runtime.deploymentMode);

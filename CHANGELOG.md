@@ -1,3 +1,7 @@
+## 2026-10-13 - Private acronym Markdown export
+
+- Add `/acronyms export`: download every active acronym and alias with its definition in `tower-acronyms.md`, generated from the live managed registry. Defer privately before data access; preserve `/acronyms all`.
+
 ## 2026-10-13 — Local battle-condition payload bridge
 
 - Preserve exact source payloads and bounded attachment bytes in a durable local platform store; ToolsBot no longer requests Message Content or reads source message content from Discord. Historical startup captures are view-only; live delivery retains existing receipts, destinations, retry polling and version checks.

@@ -1,6 +1,8 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { AttachmentBuilder, MessageFlags, SlashCommandBuilder } from 'discord.js';
 import type { CommandModule } from '../core/command-types';
 import { listManagedAcronyms } from '../services/acronym-registry';
+
+import { renderAcronymMarkdown } from '../features/acronyms/acronym-markdown';
 
 const COMMAND_NAME = 'acronyms';
 const SUBCOMMAND_ALL = 'all';
@@ -37,6 +39,9 @@ export const acronymsCommand: CommandModule = {
         .setName(SUBCOMMAND_ALL)
         .setDescription('Show every active acronym')
     )
+    .addSubcommand(subcommand => subcommand
+      .setName('export')
+      .setDescription('Download the entire acronym list as a private Markdown file'))
     .toJSON(),
   async execute(interaction) {
     if (!interaction.isChatInputCommand()) {
@@ -44,6 +49,19 @@ export const acronymsCommand: CommandModule = {
     }
 
     const subcommand = interaction.options.getSubcommand(true);
+    if (subcommand === 'export') {
+      // Set privacy before any data access; edits and router errors inherit it.
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const entries = await listManagedAcronyms();
+      const attachment = new AttachmentBuilder(Buffer.from(renderAcronymMarkdown(entries), 'utf8'))
+        .setName('tower-acronyms.md');
+      await interaction.editReply({
+        content: 'Complete acronym list: ' + entries.length + ' active entries.',
+        files: [attachment],
+        allowedMentions: { parse: [] },
+      });
+      return;
+    }
     if (subcommand !== SUBCOMMAND_ALL) {
       await interaction.reply({ content: 'Unsupported acronym listing command.', ephemeral: true });
       return;
