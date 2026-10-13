@@ -5,14 +5,15 @@ vi.mock('../services/acronym-registry', () => ({ listManagedAcronyms: list }));
 import { acronymsCommand } from './acronyms';
 import { renderAcronymMarkdown } from '../features/acronyms/acronym-markdown';
 const run = (i: unknown) => acronymsCommand.execute(i as Parameters<typeof acronymsCommand.execute>[0]);
-const interaction = (subcommand = 'export') => ({
+const interaction = (subcommand = 'all') => ({
+ id: '123', user: { id: 'owner' }, channelId: 'channel',
  isChatInputCommand: () => true, options: { getSubcommand: () => subcommand },
- deferReply: vi.fn().mockResolvedValue(undefined), editReply: vi.fn().mockResolvedValue(undefined),
+ deferReply: vi.fn().mockResolvedValue(undefined), editReply: vi.fn().mockResolvedValue({ id: 'reply' }),
  reply: vi.fn().mockResolvedValue(undefined), followUp: vi.fn().mockResolvedValue(undefined),
 });
 beforeEach(() => vi.clearAllMocks());
-it('retains all and adds export without arguments', () => {
- expect(acronymsCommand.data.options?.map(o => o.name)).toEqual(['all', 'export']);
+it('registers only all, removing export and list_all', () => {
+ expect(acronymsCommand.data.options?.map(o => o.name)).toEqual(['all']);
 });
 it('exports every current entry and alias as UTF-8 after a private defer', async () => {
  const entries = Array.from({ length: 400 }, (_, n) => ({ acronym: `alias${n}`, expansion: `Définition 🌙 ${n} ` + 'x'.repeat(100), source: 'custom' as const }));
@@ -49,8 +50,8 @@ it.each(['defer', 'read', 'upload'])('never falls back to a public response afte
  expect(i.reply).not.toHaveBeenCalled(); expect(i.followUp).not.toHaveBeenCalled();
  if (failure === 'defer') expect(list).not.toHaveBeenCalled();
 });
-it('retains private all listing', async () => {
- list.mockResolvedValue([{ acronym: 'gt', expansion: 'Golden Tower', source: 'base' }]);
- const i = interaction('all'); await run(i);
- expect(i.reply).toHaveBeenCalledWith({ content: 'Active acronyms: 1\ngt: Golden Tower', ephemeral: true });
+it.each(['export', 'list_all'])('rejects obsolete %s privately', async subcommand => {
+ const i = interaction(subcommand); await run(i);
+ expect(i.reply.mock.calls[0][0].flags).toBe(MessageFlags.Ephemeral);
+ expect(list).not.toHaveBeenCalled();
 });

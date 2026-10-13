@@ -1,3 +1,7 @@
+## 2026-10-13 - Share complete acronym list
+
+- `/acronyms all` now privately returns the complete Markdown attachment with a Share button; remove `/acronyms export`. Share publishes the same file only after its requester clicks, in the same channel. Keep acknowledgements private, expire buttons after ten minutes, and prevent duplicate or uncertain-send retries.
+
 ## 2026-10-13 - Private acronym Markdown export
 
 - Add `/acronyms export`: download every active acronym and alias with its definition in `tower-acronyms.md`, generated from the live managed registry. Defer privately before data access; preserve `/acronyms all`.
