@@ -123,8 +123,10 @@ function formatValidationStatus(result: SendBattleConditionsRecordResult): strin
       return 'channel could not be resolved as a text channel';
     case 'missing-permissions':
       return 'bot is missing channel permissions';
+    case 'delivery-uncertain':
+      return 'a previous delivery needs verification before retrying';
     case 'source-payload-unavailable':
-      return 'latest stored entry exists, but the original Discord payload could not be reconstructed';
+      return 'latest stored entry exists, but its source payload is not available in the local bridge';
   }
 }
 
@@ -242,7 +244,7 @@ export const battleConditionsCommand: CommandModule = {
       const sourcePayload = await buildBattleConditionsSourcePayload(interaction.client as unknown as import('../core/tools-bot-client').ToolsBotClient, record);
       if (!sourcePayload) {
         await interaction.reply({
-          content: 'The original battle conditions message could not be reconstructed exactly from Discord source data.',
+          content: 'This battle conditions entry is not available in the local source bridge yet.',
           ephemeral: true,
         });
         return;

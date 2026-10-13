@@ -1,3 +1,4 @@
+import { canAutomaticallyDeliverBattleRecord } from './battle-conditions-payload';
 import {
   battleConditionsSourceGuildId,
   type BattleConditionsRank,
@@ -49,7 +50,7 @@ async function runDelivery(
     }
 
     for (const [rank, record] of Object.entries(records) as Array<[LocalBattleConditionsRank, BattleConditionsRecord | undefined]>) {
-      if (!record) {
+      if (!record || !await canAutomaticallyDeliverBattleRecord(record)) {
         continue;
       }
 

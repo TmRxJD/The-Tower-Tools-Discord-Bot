@@ -1,3 +1,7 @@
+## 2026-10-13 — Local battle-condition payload bridge
+
+- Preserve exact source payloads and bounded attachment bytes in a durable local platform store; ToolsBot no longer requests Message Content or reads source message content from Discord. Historical startup captures are view-only; live delivery retains existing receipts, destinations, retry polling and version checks.
+
 ## 2026-10-06 - Lab collector acknowledgement safety
 
 - Acknowledge selectors, toggles and submitted modals before saving settings or rendering. Reuse each acknowledgement promise so failed or ambiguous callbacks are never retried.

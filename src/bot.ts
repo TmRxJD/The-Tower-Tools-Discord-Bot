@@ -72,7 +72,7 @@ async function bootstrap() {
 
     client = new ToolsBotClient(
       {
-        intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+        intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
       },
       appConfig
     );

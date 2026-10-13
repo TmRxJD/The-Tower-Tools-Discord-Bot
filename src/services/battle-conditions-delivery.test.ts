@@ -1,3 +1,4 @@
+vi.mock('./battle-conditions-payload', () => ({ canAutomaticallyDeliverBattleRecord: vi.fn(async () => true) }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const listBattleConditionsSubscriptionsMock = vi.fn();

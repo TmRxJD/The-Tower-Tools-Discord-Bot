@@ -133,3 +133,119 @@ index 391f697f96338f08eef686128f254ea44ee3fbb8..5cf358e0ffdea1e9f1e7247a76c08a84
  }).strict();
  exports.battleConditionsSubscriptionSchema = zod_1.z.object({
      guildId: zod_1.z.string().min(1),
+
+diff --git a/dist/node/battle-payload-store.js b/dist/node/battle-payload-store.js
+new file mode 100644
+--- /dev/null
++++ b/dist/node/battle-payload-store.js
+@@ -0,0 +1,79 @@
++'use strict';
++const fs = require('node:fs/promises');
++const path = require('node:path');
++const { createHash, randomUUID } = require('node:crypto');
++const { z } = require('zod');
++const { battleConditionsMessageDataSchema } = require('../tools/battle-conditions');
++const MAX_BYTES = 32 * 1024 * 1024;
++const payloadSchema = z.object({
++  content: z.string().max(2000),
++  embeds: z.array(z.record(z.string(), z.json())).max(10),
++  files: z.array(z.object({ name: z.string().min(1).max(255).regex(/^[^\\/:]+$/), data: z.string().max(28 * 1024 * 1024).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/) }).strict()).max(10),
++}).strict().refine(p => !!(p.content || p.embeds.length || p.files.length), 'Empty source payload');
++const envelopeSchema = z.object({ version: z.literal(1), capturedAt: z.number().int().nonnegative(), automatic: z.boolean(), record: battleConditionsMessageDataSchema, payload: payloadSchema }).strict();
++function key(record) {
++  return createHash('sha256').update(JSON.stringify([record.rank, record.tournamentDate, record.sourceGuildId, record.sourceChannelId, record.sourceMessageId, record.sourceMessageUpdatedAt])).digest('hex');
++}
++function directory(root, rank) {
++  return path.join(root, battleConditionsMessageDataSchema.shape.rank.parse(rank));
++}
++async function readFile(file) {
++  const stat = await fs.stat(file);
++  if (stat.size > MAX_BYTES) throw new Error('Battle payload exceeds size limit');
++  const entry = envelopeSchema.parse(JSON.parse(await fs.readFile(file, 'utf8')));
++  if (entry.capturedAt > Date.now() + 60000 || entry.record.sourceMessageUpdatedAt > Date.now() + 60000) throw new Error('Future battle payload');
++  return entry;
++}
++async function readBattlePayload(root, record) {
++  try {
++    const entry = await readFile(path.join(directory(root, record.rank), key(record) + '.json'));
++    if (key(entry.record) !== key(record)) throw new Error('Battle payload identity mismatch');
++    return entry;
++  } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
++}
++async function listBattlePayloads(root, rank) {
++  const dir = directory(root, rank);
++  let names;
++  try { names = await fs.readdir(dir); } catch (error) { if (error.code === 'ENOENT') return []; throw error; }
++  const entries = [];
++  for (const name of names.filter(name => /^[a-f0-9]{64}\.json$/.test(name))) {
++    // Reject malformed records independently, allowing healthy ranks/versions to proceed.
++    try {
++      const entry = await readFile(path.join(dir, name));
++      if (entry.record.rank === rank && name === key(entry.record) + '.json') entries.push(entry);
++    } catch { /* An invalid file is never delivered or deleted. */ }
++  }
++  return entries.sort((a, b) => b.record.tournamentTimestamp - a.record.tournamentTimestamp || b.record.sourceMessageUpdatedAt - a.record.sourceMessageUpdatedAt);
++}
++async function writeBattlePayload(root, input) {
++  const entry = envelopeSchema.parse(input);
++  const activation = await initializeBattlePayloadStore(root);
++  entry.automatic = entry.automatic && entry.record.sourceMessageUpdatedAt >= activation;
++  const text = JSON.stringify(entry);
++  if (Buffer.byteLength(text) > MAX_BYTES) throw new Error('Battle payload exceeds size limit');
++  const existing = await readBattlePayload(root, entry.record);
++  if (existing) return existing; // Immutable version: a seed cannot become an automatic replay.
++  const dir = directory(root, entry.record.rank);
++  await fs.mkdir(dir, { recursive: true });
++  const target = path.join(dir, key(entry.record) + '.json');
++  const temp = target + '.' + randomUUID() + '.tmp';
++  const handle = await fs.open(temp, 'wx');
++  try { await handle.writeFile(text); await handle.sync(); } finally { await handle.close(); }
++  try {
++    // Atomic no-overwrite publication, including overlapping create/update handlers.
++    await fs.link(temp, target);
++  } catch (error) { if (error.code !== 'EEXIST') throw error; }
++  finally { await fs.unlink(temp).catch(() => {}); }
++  return readBattlePayload(root, entry.record);
++}
++function projectBattleRecord(record) {
++  return battleConditionsMessageDataSchema.parse(Object.fromEntries(Object.keys(battleConditionsMessageDataSchema.shape).map(name => [name, record[name]])));
++}
++async function initializeBattlePayloadStore(root, now = Date.now()) {
++  await fs.mkdir(root, { recursive: true });
++  const file = path.join(root, 'activation.json');
++  try { await fs.writeFile(file, JSON.stringify({ since: now }), { flag: 'wx' }); }
++  catch (error) { if (error.code !== 'EEXIST') throw error; }
++  return z.object({ since: z.number().int().nonnegative() }).strict().parse(JSON.parse(await fs.readFile(file, 'utf8'))).since;
++}
++module.exports = { readBattlePayload, listBattlePayloads, writeBattlePayload, projectBattleRecord, initializeBattlePayloadStore };
+diff --git a/dist/node/index.js b/dist/node/index.js
+--- a/dist/node/index.js
++++ b/dist/node/index.js
+@@ -23,1 +23,2 @@
+ __exportStar(require("thetowersdk/node"), exports);
++__exportStar(require("./battle-payload-store"), exports);
+
+diff --git a/dist/node/battle-payload-store.d.ts b/dist/node/battle-payload-store.d.ts
+new file mode 100644
+--- /dev/null
++++ b/dist/node/battle-payload-store.d.ts
+@@ -0,0 +1,13 @@
++import type { BattleConditionsMessageData, BattleConditionsRank } from '../tools/battle-conditions';
++export interface BattlePayload {
++  version: 1;
++  capturedAt: number;
++  automatic: boolean;
++  record: BattleConditionsMessageData;
++  payload: { content: string; embeds: Record<string, unknown>[]; files: { name: string; data: string }[] };
++}
++export declare function projectBattleRecord(record: unknown): BattleConditionsMessageData;
++export declare function readBattlePayload(root: string, record: BattleConditionsMessageData): Promise<BattlePayload | null>;
++export declare function listBattlePayloads(root: string, rank: BattleConditionsRank): Promise<BattlePayload[]>;
++export declare function writeBattlePayload(root: string, input: BattlePayload): Promise<BattlePayload>;
++export declare function initializeBattlePayloadStore(root: string, now?: number): Promise<number>;
+diff --git a/dist/node/index.d.ts b/dist/node/index.d.ts
+--- a/dist/node/index.d.ts
++++ b/dist/node/index.d.ts
+@@ -7,1 +7,2 @@
+ export * from 'thetowersdk/node';
++export * from './battle-payload-store';
