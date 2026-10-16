@@ -1,3 +1,13 @@
+## 2026-10-16 - Creator code submissions
+
+- Add /creator add with a private form for code, what the creator is known for, and a final field matching 1509606869336068347. The ID match is not a membership check. Reject empty, overlong, mention-containing, or mismatched values and duplicate users/codes; persist submissions in SQLite and display them in /creator list.
+
+## 2026-10-15 - Retire expired lab-session cleanup safely
+
+- Bound the lab collector to the original interaction token deadline with 30 seconds of cleanup headroom, including time already spent rendering the first reply.
+- Skip cleanup after token expiry; retire invalid/unknown webhook and deleted-response cleanup failures without retries or public fallback. Keep permission, malformed-request and network failures visible through existing diagnostics. Scoped-session release still happens before cleanup.
+- Cover deadline calculations, successful cleanup, expired/unavailable responses and unexpected failures with isolated tests. No changes to lab settings, cloud schemas, credentials or permissions.
+
 ## 2026-10-13 - Share complete acronym list
 
 - `/acronyms all` now privately returns the complete Markdown attachment with a Share button; remove `/acronyms export`. Share publishes the same file only after its requester clicks, in the same channel. Keep acknowledgements private, expire buttons after ten minutes, and prevent duplicate or uncertain-send retries.
@@ -51,3 +61,5 @@
 - Battle-condition fallback checks current/future tournaments every day and rechecks source updates. Concurrent push/poll deliveries are serialized; older tournaments cannot overwrite newer delivery receipts. Failed polling is contained and retried.
 
 - Ensure fatal bootstrap/shutdown exits the process and disconnects before releasing locks; ordinary resumable gateway disconnects no longer shut down services.
+
+

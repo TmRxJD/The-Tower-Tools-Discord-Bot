@@ -1,4 +1,5 @@
 import { deferCollectorUpdate, runCollectorTask } from '../services/collector-task';
+import { cleanupEphemeralSession, ephemeralCollectorTimeout } from '../services/ephemeral-session-cleanup';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -405,7 +406,8 @@ export const labCommand: CommandModule = {
       return;
     }
 
-    const collector = reply.createMessageComponentCollector({ time: labConfig.behavior.collectorTimeoutMs });
+    const collector = reply.createMessageComponentCollector({ time: Math.max(1,
+      ephemeralCollectorTimeout(interaction.createdTimestamp, labConfig.behavior.collectorTimeoutMs)) });
     const client = interaction.client as ToolsBotClient;
     const scopedSessionId = `lab:${interaction.id}`;
     client.scopedInteractionSessions.register({
@@ -681,10 +683,10 @@ export const labCommand: CommandModule = {
           return row;
         });
 
-        await interaction.editReply({
+        await cleanupEphemeralSession(interaction.createdTimestamp, () => interaction.editReply({
           embeds: [buildEmbed().setFooter({ text: labConfig.ui.sessionEnded })],
           components: disabledRows,
-        });
+        }));
       });
     });
   },

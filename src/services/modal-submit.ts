@@ -1,11 +1,12 @@
 import type {
+  ChatInputCommandInteraction,
   MessageComponentInteraction,
   ModalBuilder,
   ModalSubmitInteraction,
 } from 'discord.js'
 
 type ShowModalAndAwaitSubmitArgs = {
-  componentInteraction: MessageComponentInteraction
+  componentInteraction: MessageComponentInteraction | ChatInputCommandInteraction
   modal: ModalBuilder
   baseCustomId: string
   userId: string
