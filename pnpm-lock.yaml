@@ -895,7 +895,7 @@ packages:
     resolution: {integrity: sha512-y+KoLLlkXVUHWozYlN1vmMD9TQMPJObqml5nPA5vPWgHtOgm8q5O74UtzM23eayidvmeFX6tF5e2gDdyxcpy3Q==}
 
   '@tmrxjd/platform@0.2.4':
-    resolution: {integrity: sha512-6HVQ6Tc1CRNff7FLikmSFu0FJkqyPgzzWV9hekwUSnq+aCHlMRP1K5iweyxJ94NLJKmdIUgKtT12Khu5s/C11A==, tarball: https://npm.pkg.github.com/download/@tmrxjd/platform/0.2.4/c4f789660fbee104dfddbf97f47a104bb4d19d3d}
+    resolution: {integrity: sha512-6HVQ6Tc1CRNff7FLikmSFu0FJkqyPgzzWV9hekwUSnq+aCHlMRP1K5iweyxJ94NLJKmdIUgKtT12Khu5s/C11A==, tarball: https://registry.npmjs.org/@tmrxjd/platform/-/platform-0.2.4.tgz}
     peerDependencies:
       '@gutenye/ocr-node': ^1.4.8
       '@huggingface/transformers': ^3.8.1
@@ -910,7 +910,7 @@ packages:
       typescript: ~5.8.3
 
   '@tmrxjd/tracker-languages@0.1.23':
-    resolution: {integrity: sha512-UAcF0ZqMSeRysnmBfh1zqhgCdiYq19ag3187C1PJFcRyOuwPXMhLILq9lPEJTAJNrHZcbqbqR3+1bwzOswQGkg==, tarball: https://npm.pkg.github.com/download/@tmrxjd/tracker-languages/0.1.23/c66b9fcf2a4f581eca6028ae2c4a6c0fa1e89e77}
+    resolution: {integrity: sha512-UAcF0ZqMSeRysnmBfh1zqhgCdiYq19ag3187C1PJFcRyOuwPXMhLILq9lPEJTAJNrHZcbqbqR3+1bwzOswQGkg==, tarball: https://registry.npmjs.org/@tmrxjd/tracker-languages/-/tracker-languages-0.1.23.tgz}
 
   '@tootallnate/once@1.1.2':
     resolution: {integrity: sha512-RbzJvlNzmRq5c3O09UipeuXno4tA1FE6ikOjxZK0tuxVv3412l64l5t1W5pj4+rJq9vpkm/kwiR07aZXnsKPxw==}

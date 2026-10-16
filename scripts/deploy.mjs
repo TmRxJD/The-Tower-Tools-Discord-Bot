@@ -34,7 +34,7 @@ const envKeys = [
   'TRACKERAI_KB_CHUNKS_FILE_ID',
   'TRACKERAI_KB_INDEX_FILE_ID',
 ]
-const platformRegistry = getEnv('TMRXJD_PLATFORM_REGISTRY', 'https://npm.pkg.github.com')
+const platformRegistry = getEnv('TMRXJD_PLATFORM_REGISTRY', 'https://registry.npmjs.org')
 
 function getEnv(name, fallback = '') {
   const value = process.env[name]
@@ -205,21 +205,26 @@ function checkPm2() {
 }
 
 function checkPackageAccess() {
-  // Do NOT swallow the error: a registry-auth failure here previously surfaced
-  // only as "Command failed", which hid why the runner could not read the
-  // package. Capture stdout/stderr and re-throw with the real diagnostic.
+  const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
+  const platformVersion = packageJson.dependencies?.['@tmrxjd/platform'] ?? packageJson.devDependencies?.['@tmrxjd/platform']
+  if (!platformVersion || !/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(platformVersion)) {
+    throw new Error('A pinned @tmrxjd/platform version is required for deployment preflight')
+  }
+
   try {
-    execSync(`pnpm view @tmrxjd/platform version --registry ${platformRegistry} --json`, {
+    const resolvedVersion = execSync('pnpm view @tmrxjd/platform@' + platformVersion + ' version --registry ' + platformRegistry + ' --json', {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: process.env,
       encoding: 'utf8',
-    })
+    }).trim().replace(/^"|"$/g, '')
+    if (resolvedVersion !== platformVersion) {
+      throw new Error('Registry version readback did not match the pinned platform version')
+    }
   } catch (error) {
     const detail = [error?.stdout, error?.stderr].filter(Boolean).join('\n').trim()
     throw new Error(
-      `Cannot read @tmrxjd/platform from ${platformRegistry}. `
-      + `Ensure the runner has a GitHub Packages read token (NODE_AUTH_TOKEN / .npmrc).`
-      + (detail ? `\n\nRegistry output:\n${detail}` : ''),
+      'Cannot read pinned @tmrxjd/platform@' + platformVersion + ' from ' + platformRegistry + '.'
+      + (detail ? '\n\nRegistry output:\n' + detail : ''),
     )
   }
 }
