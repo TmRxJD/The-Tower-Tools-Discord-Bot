@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@tmrxjd/platform@0.2.4':
+    hash: ee358704d532c05f1c76b14a5c699896491c0aa31e6b491a1f06accce58de8b0
+    path: patches/@tmrxjd__platform@0.2.4.patch
+
 importers:
 
   .:
@@ -16,7 +21,10 @@ importers:
         version: 0.1.97
       '@tmrxjd/platform':
         specifier: 0.2.4
-        version: 0.2.4(@gutenye/ocr-node@1.4.8)(@huggingface/transformers@3.8.1)(@vue/compiler-dom@3.5.32)(@vue/compiler-sfc@3.5.32)(fake-indexeddb@6.2.5)(hyperformula@3.2.0)(indexeddb-js@0.0.14)(magic-string@0.30.21)(sharp@0.34.5)(sqlite3@5.1.7)(typescript@5.9.3)
+        version: 0.2.4(patch_hash=ee358704d532c05f1c76b14a5c699896491c0aa31e6b491a1f06accce58de8b0)(@gutenye/ocr-node@1.4.8)(@huggingface/transformers@3.8.1)(@vue/compiler-dom@3.5.32)(@vue/compiler-sfc@3.5.32)(fake-indexeddb@6.2.5)(hyperformula@3.2.0)(indexeddb-js@0.0.14)(magic-string@0.30.21)(sharp@0.34.5)(sqlite3@5.1.7)(typescript@5.9.3)
+      broadcast-channel:
+        specifier: 7.3.0
+        version: 7.3.0
       canvas:
         specifier: ^3.2.1
         version: 3.2.1
@@ -895,7 +903,7 @@ packages:
     resolution: {integrity: sha512-y+KoLLlkXVUHWozYlN1vmMD9TQMPJObqml5nPA5vPWgHtOgm8q5O74UtzM23eayidvmeFX6tF5e2gDdyxcpy3Q==}
 
   '@tmrxjd/platform@0.2.4':
-    resolution: {integrity: sha512-6HVQ6Tc1CRNff7FLikmSFu0FJkqyPgzzWV9hekwUSnq+aCHlMRP1K5iweyxJ94NLJKmdIUgKtT12Khu5s/C11A==, tarball: https://npm.pkg.github.com/download/@tmrxjd/platform/0.2.4/c4f789660fbee104dfddbf97f47a104bb4d19d3d}
+    resolution: {integrity: sha512-6HVQ6Tc1CRNff7FLikmSFu0FJkqyPgzzWV9hekwUSnq+aCHlMRP1K5iweyxJ94NLJKmdIUgKtT12Khu5s/C11A==, tarball: https://registry.npmjs.org/@tmrxjd/platform/-/platform-0.2.4.tgz}
     peerDependencies:
       '@gutenye/ocr-node': ^1.4.8
       '@huggingface/transformers': ^3.8.1
@@ -908,9 +916,32 @@ packages:
       sharp: ^0.34.1
       sqlite3: ^5.1.7
       typescript: ~5.8.3
+    peerDependenciesMeta:
+      '@gutenye/ocr-node':
+        optional: true
+      '@huggingface/transformers':
+        optional: true
+      '@vue/compiler-dom':
+        optional: true
+      '@vue/compiler-sfc':
+        optional: true
+      fake-indexeddb:
+        optional: true
+      hyperformula:
+        optional: true
+      indexeddb-js:
+        optional: true
+      magic-string:
+        optional: true
+      sharp:
+        optional: true
+      sqlite3:
+        optional: true
+      typescript:
+        optional: true
 
   '@tmrxjd/tracker-languages@0.1.23':
-    resolution: {integrity: sha512-UAcF0ZqMSeRysnmBfh1zqhgCdiYq19ag3187C1PJFcRyOuwPXMhLILq9lPEJTAJNrHZcbqbqR3+1bwzOswQGkg==, tarball: https://npm.pkg.github.com/download/@tmrxjd/tracker-languages/0.1.23/c66b9fcf2a4f581eca6028ae2c4a6c0fa1e89e77}
+    resolution: {integrity: sha512-UAcF0ZqMSeRysnmBfh1zqhgCdiYq19ag3187C1PJFcRyOuwPXMhLILq9lPEJTAJNrHZcbqbqR3+1bwzOswQGkg==, tarball: https://registry.npmjs.org/@tmrxjd/tracker-languages/-/tracker-languages-0.1.23.tgz}
 
   '@tootallnate/once@1.1.2':
     resolution: {integrity: sha512-RbzJvlNzmRq5c3O09UipeuXno4tA1FE6ikOjxZK0tuxVv3412l64l5t1W5pj4+rJq9vpkm/kwiR07aZXnsKPxw==}
@@ -2768,13 +2799,16 @@ packages:
 
 snapshots:
 
-  '@babel/helper-string-parser@7.27.1': {}
+  '@babel/helper-string-parser@7.27.1':
+    optional: true
 
-  '@babel/helper-validator-identifier@7.28.5': {}
+  '@babel/helper-validator-identifier@7.28.5':
+    optional: true
 
   '@babel/parser@7.29.2':
     dependencies:
       '@babel/types': 7.29.0
+    optional: true
 
   '@babel/runtime@7.28.6': {}
 
@@ -2784,6 +2818,7 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
+    optional: true
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
@@ -2975,8 +3010,10 @@ snapshots:
       '@techstark/opencv-js': 4.9.0-release.3
       js-clipper: 1.0.1
       tiny-invariant: 1.3.3
+    optional: true
 
-  '@gutenye/ocr-models@1.4.2': {}
+  '@gutenye/ocr-models@1.4.2':
+    optional: true
 
   '@gutenye/ocr-node@1.4.8':
     dependencies:
@@ -2984,6 +3021,7 @@ snapshots:
       '@gutenye/ocr-models': 1.4.2
       onnxruntime-node: 1.24.3
       sharp: 0.33.5
+    optional: true
 
   '@huggingface/jinja@0.5.7': {}
 
@@ -3369,13 +3407,17 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@techstark/opencv-js@4.9.0-release.3': {}
+  '@techstark/opencv-js@4.9.0-release.3':
+    optional: true
 
-  '@tmrxjd/platform@0.2.4(@gutenye/ocr-node@1.4.8)(@huggingface/transformers@3.8.1)(@vue/compiler-dom@3.5.32)(@vue/compiler-sfc@3.5.32)(fake-indexeddb@6.2.5)(hyperformula@3.2.0)(indexeddb-js@0.0.14)(magic-string@0.30.21)(sharp@0.34.5)(sqlite3@5.1.7)(typescript@5.9.3)':
+  '@tmrxjd/platform@0.2.4(patch_hash=ee358704d532c05f1c76b14a5c699896491c0aa31e6b491a1f06accce58de8b0)(@gutenye/ocr-node@1.4.8)(@huggingface/transformers@3.8.1)(@vue/compiler-dom@3.5.32)(@vue/compiler-sfc@3.5.32)(fake-indexeddb@6.2.5)(hyperformula@3.2.0)(indexeddb-js@0.0.14)(magic-string@0.30.21)(sharp@0.34.5)(sqlite3@5.1.7)(typescript@5.9.3)':
     dependencies:
+      '@tmrxjd/tracker-languages': 0.1.23
+      thetowersdk: 0.11.0
+      zod: 4.3.6
+    optionalDependencies:
       '@gutenye/ocr-node': 1.4.8
       '@huggingface/transformers': 3.8.1
-      '@tmrxjd/tracker-languages': 0.1.23
       '@vue/compiler-dom': 3.5.32
       '@vue/compiler-sfc': 3.5.32
       fake-indexeddb: 6.2.5
@@ -3384,9 +3426,7 @@ snapshots:
       magic-string: 0.30.21
       sharp: 0.34.5
       sqlite3: 5.1.7
-      thetowersdk: 0.11.0
       typescript: 5.9.3
-      zod: 4.3.6
 
   '@tmrxjd/tracker-languages@0.1.23':
     dependencies:
@@ -3616,11 +3656,13 @@ snapshots:
       entities: 7.0.1
       estree-walker: 2.0.2
       source-map-js: 1.2.1
+    optional: true
 
   '@vue/compiler-dom@3.5.32':
     dependencies:
       '@vue/compiler-core': 3.5.32
       '@vue/shared': 3.5.32
+    optional: true
 
   '@vue/compiler-sfc@3.5.32':
     dependencies:
@@ -3633,13 +3675,16 @@ snapshots:
       magic-string: 0.30.21
       postcss: 8.5.8
       source-map-js: 1.2.1
+    optional: true
 
   '@vue/compiler-ssr@3.5.32':
     dependencies:
       '@vue/compiler-dom': 3.5.32
       '@vue/shared': 3.5.32
+    optional: true
 
-  '@vue/shared@3.5.32': {}
+  '@vue/shared@3.5.32':
+    optional: true
 
   abbrev@1.1.1:
     optional: true
@@ -3654,7 +3699,8 @@ snapshots:
 
   acorn@8.16.0: {}
 
-  adm-zip@0.5.17: {}
+  adm-zip@0.5.17:
+    optional: true
 
   agent-base@6.0.2:
     dependencies:
@@ -3880,6 +3926,7 @@ snapshots:
     dependencies:
       color-name: 1.1.4
       simple-swizzle: 0.2.4
+    optional: true
 
   color-support@1.1.3:
     optional: true
@@ -3888,6 +3935,7 @@ snapshots:
     dependencies:
       color-convert: 2.0.1
       color-string: 1.9.1
+    optional: true
 
   commander@14.0.3:
     optional: true
@@ -4002,7 +4050,8 @@ snapshots:
     dependencies:
       once: 1.4.0
 
-  entities@7.0.1: {}
+  entities@7.0.1:
+    optional: true
 
   env-paths@2.2.1:
     optional: true
@@ -4121,7 +4170,8 @@ snapshots:
 
   estraverse@5.3.0: {}
 
-  estree-walker@2.0.2: {}
+  estree-walker@2.0.2:
+    optional: true
 
   estree-walker@3.0.3:
     dependencies:
@@ -4140,7 +4190,8 @@ snapshots:
 
   expect-type@1.3.0: {}
 
-  fake-indexeddb@6.2.5: {}
+  fake-indexeddb@6.2.5:
+    optional: true
 
   fast-deep-equal@3.1.3: {}
 
@@ -4407,7 +4458,8 @@ snapshots:
       call-bound: 1.0.4
       has-tostringtag: 1.0.2
 
-  is-arrayish@0.3.4: {}
+  is-arrayish@0.3.4:
+    optional: true
 
   is-binary-path@2.1.0:
     dependencies:
@@ -4473,7 +4525,8 @@ snapshots:
 
   js-base64@3.7.8: {}
 
-  js-clipper@1.0.1: {}
+  js-clipper@1.0.1:
+    optional: true
 
   js-yaml@4.1.1:
     dependencies:
@@ -4695,7 +4748,8 @@ snapshots:
 
   onnxruntime-common@1.22.0-dev.20250409-89f8206ba4: {}
 
-  onnxruntime-common@1.24.3: {}
+  onnxruntime-common@1.24.3:
+    optional: true
 
   onnxruntime-node@1.21.0:
     dependencies:
@@ -4708,6 +4762,7 @@ snapshots:
       adm-zip: 0.5.17
       global-agent: 3.0.0
       onnxruntime-common: 1.24.3
+    optional: true
 
   onnxruntime-web@1.22.0-dev.20250409-89f8206ba4:
     dependencies:
@@ -5031,6 +5086,7 @@ snapshots:
       '@img/sharp-wasm32': 0.33.5
       '@img/sharp-win32-ia32': 0.33.5
       '@img/sharp-win32-x64': 0.33.5
+    optional: true
 
   sharp@0.34.5:
     dependencies:
@@ -5099,6 +5155,7 @@ snapshots:
   simple-swizzle@0.2.4:
     dependencies:
       is-arrayish: 0.3.4
+    optional: true
 
   smart-buffer@4.2.0:
     optional: true
@@ -5228,7 +5285,8 @@ snapshots:
 
   tiny-emitter@2.1.0: {}
 
-  tiny-invariant@1.3.3: {}
+  tiny-invariant@1.3.3:
+    optional: true
 
   tinybench@2.9.0: {}
 

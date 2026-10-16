@@ -7,12 +7,14 @@ import { startBattleConditionsScheduler } from '../services/battle-conditions-sc
 import { startReminderScheduler } from '../services/reminder-scheduler';
 import { startCloudSyncOutboxDrainScheduler } from '../services/cloud-sync-outbox-drain';
 import { scheduleAllActiveGiveaways } from '../features/giveaway/giveaway-scheduler';
+import { startMemoryTelemetry } from '../services/memory-telemetry';
 
 export function registerEvents(client: ToolsBotClient) {
   registerGatewayHealthLogging(client);
 
   client.once(Events.ClientReady, readyClient => {
     logger.info(`Ready! Logged in as ${readyClient.user.tag}`);
+    startMemoryTelemetry(client);
     startReminderScheduler(client);
     void startBattleConditionsBridgeServer(client);
     startBattleConditionsScheduler(client);

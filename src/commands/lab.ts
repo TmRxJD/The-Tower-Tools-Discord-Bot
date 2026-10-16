@@ -1,3 +1,5 @@
+import { deferCollectorUpdate, runCollectorTask } from '../services/collector-task';
+import { cleanupEphemeralSession, ephemeralCollectorTimeout } from '../services/ephemeral-session-cleanup';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -404,7 +406,8 @@ export const labCommand: CommandModule = {
       return;
     }
 
-    const collector = reply.createMessageComponentCollector({ time: labConfig.behavior.collectorTimeoutMs });
+    const collector = reply.createMessageComponentCollector({ time: Math.max(1,
+      ephemeralCollectorTimeout(interaction.createdTimestamp, labConfig.behavior.collectorTimeoutMs)) });
     const client = interaction.client as ToolsBotClient;
     const scopedSessionId = `lab:${interaction.id}`;
     client.scopedInteractionSessions.register({
@@ -431,7 +434,7 @@ export const labCommand: CommandModule = {
 
     const refreshReply = async (componentInteraction?: MessageComponentInteraction) => {
       if (componentInteraction && !componentInteraction.deferred && !componentInteraction.replied) {
-        await componentInteraction.deferUpdate();
+        await deferCollectorUpdate(componentInteraction);
       }
 
       const nextAttachment = await buildAttachment();
@@ -442,11 +445,10 @@ export const labCommand: CommandModule = {
         files: nextAttachment ? [nextAttachment] : [],
       };
 
-            client.scopedInteractionSessions.unregister(scopedSessionId);
       await interaction.editReply(payload);
     };
 
-    void (async () => {
+    void runCollectorTask('Lab cloud reconciliation', async () => {
       const reconcile = await reconcileUserLabSettings(storageUserId, cloudContext);
       await runCloudReconcileUi<UserLabSettings>({
         interaction,
@@ -463,9 +465,9 @@ export const labCommand: CommandModule = {
           await refreshReply();
         },
       });
-    })();
+    });
 
-    collector.on('collect', async componentInteraction => {
+    const handleComponentInteraction = async (componentInteraction: MessageComponentInteraction) => {
       if (componentInteraction.user.id !== interaction.user.id) {
         await componentInteraction.reply({ content: labConfig.ui.notYourSession, ephemeral: true });
         return;
@@ -489,6 +491,11 @@ export const labCommand: CommandModule = {
         await componentInteraction.update({ content: labConfig.ui.closed, embeds: [], components: [] });
         collector.stop();
         return;
+      }
+
+      // Acknowledge selections before local/cloud saves or chart rendering can consume the deadline.
+      if (componentInteraction.isStringSelectMenu() || componentInteraction.customId === ids.toggleHideMaxed) {
+        await deferCollectorUpdate(componentInteraction);
       }
 
       if (componentInteraction.customId === ids.toggleHideMaxed) {
@@ -555,13 +562,13 @@ export const labCommand: CommandModule = {
         if (!submitted) {
           return;
         }
+        await deferCollectorUpdate(submitted);
 
         settings.labSpeed = Math.max(0, Math.floor(Number(submitted.fields.getTextInputValue(ids.settingsLabSpeed)) || 0));
         settings.labRelic = Math.max(0, Number(submitted.fields.getTextInputValue(ids.settingsLabRelic)) || 0);
         settings.labDiscount = Math.max(0, Math.floor(Number(submitted.fields.getTextInputValue(ids.settingsLabDiscount)) || 0));
 
         await saveUserLabSettings(storageUserId, settings, cloudContext);
-        await submitted.deferUpdate();
         await refreshReply();
         return;
       }
@@ -570,7 +577,7 @@ export const labCommand: CommandModule = {
         const lab = getLabByKey(selectedLab);
         if (!lab) {
           selectedLab = null;
-          await componentInteraction.deferUpdate();
+          await deferCollectorUpdate(componentInteraction);
           await refreshReply();
           return;
         }
@@ -609,6 +616,7 @@ export const labCommand: CommandModule = {
         if (!submitted) {
           return;
         }
+        await deferCollectorUpdate(submitted);
 
         const startValue = Number(submitted.fields.getTextInputValue(ids.rangeStartLevel)) || 0;
         const targetValue = Number(submitted.fields.getTextInputValue(ids.rangeTargetLevel)) || 0;
@@ -619,7 +627,6 @@ export const labCommand: CommandModule = {
         }
 
         await saveUserLabSettings(storageUserId, settings, cloudContext);
-        await submitted.deferUpdate();
         await refreshReply();
         return;
       }
@@ -662,19 +669,25 @@ export const labCommand: CommandModule = {
         return;
       }
 
-      await componentInteraction.deferUpdate();
+      await deferCollectorUpdate(componentInteraction);
+    };
+    collector.on('collect', componentInteraction => {
+      void runCollectorTask('Lab component', () => handleComponentInteraction(componentInteraction));
     });
 
-    collector.on('end', async () => {
-      const disabledRows = buildComponents().map(row => {
-        row.components.forEach(component => component.setDisabled(true));
-        return row;
-      });
+    collector.on('end', () => {
+      client.scopedInteractionSessions.unregister(scopedSessionId);
+      void runCollectorTask('Lab session cleanup', async () => {
+        const disabledRows = buildComponents().map(row => {
+          row.components.forEach(component => component.setDisabled(true));
+          return row;
+        });
 
-      await interaction.editReply({
-        embeds: [buildEmbed().setFooter({ text: labConfig.ui.sessionEnded })],
-        components: disabledRows,
-      }).catch(() => {});
+        await cleanupEphemeralSession(interaction.createdTimestamp, () => interaction.editReply({
+          embeds: [buildEmbed().setFooter({ text: labConfig.ui.sessionEnded })],
+          components: disabledRows,
+        }));
+      });
     });
   },
 };

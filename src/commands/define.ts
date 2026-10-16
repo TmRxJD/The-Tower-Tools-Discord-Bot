@@ -1,3 +1,4 @@
+import { buildDefineResponse } from '../services/define-response';
 import { SlashCommandBuilder, type ChatInputCommandInteraction } from 'discord.js';
 import type { CommandModule } from '../core/command-types';
 import { quoteText } from '../utils/acronym-expansion';
@@ -40,10 +41,10 @@ export const defineCommand: CommandModule = {
     const quoted = quoteText(textInput);
     if (!changed) {
       const content = quoted ? `${quoted}\n\n${defineConfig.noAcronyms}` : defineConfig.noAcronyms;
-      await interaction.editReply({ content });
+      await interaction.editReply(buildDefineResponse(content));
       return;
     }
 
-    await interaction.editReply({ content: `${quoted}\n\n${expanded}` });
+    await interaction.editReply(buildDefineResponse(`${quoted}\n\n${expanded}`));
   },
 };

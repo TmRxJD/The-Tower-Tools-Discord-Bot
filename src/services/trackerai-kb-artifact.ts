@@ -29,6 +29,15 @@ const REMOTE_VERSION_TTL_MS = 60_000;
 let cachedBundle: PublishedTrackerAiKbArtifactBundle | null = null;
 let lastRemoteVersionCheckAtMs = 0;
 
+export function getCachedTrackerAiKbArtifactCounts(): { chunks: number; embeddings: number } {
+  const chunks = cachedBundle?.chunks as { chunks?: unknown } | undefined;
+  const index = cachedBundle?.index as { embeddings?: unknown } | undefined;
+  return {
+    chunks: Array.isArray(chunks?.chunks) ? chunks.chunks.length : 0,
+    embeddings: Array.isArray(index?.embeddings) ? index.embeddings.length : 0,
+  };
+}
+
 function readTrackerAiKbArtifactConfig(): TrackerAiKbArtifactConfig | null {
   const cfg = getAppConfig().appwrite;
   if (!cfg) return null;

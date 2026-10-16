@@ -1,3 +1,4 @@
+import { listLocalBattleRecords } from './battle-conditions-payload';
 import {
   battleConditionsAppwriteDocumentSchema,
   battleConditionsDatabaseId,
@@ -98,6 +99,8 @@ function logLocalBridgeFallback(reason: 'missing-client' | 'cloud-error', detail
 }
 
 export async function getLatestBattleConditions(rank: BattleConditionsRank): Promise<BattleConditionsRecord | null> {
+  const local = await listLocalBattleRecords(rank);
+  if (local[0]) return local[0];
   const client = getAppwriteClient();
   if (!client) {
     logLocalBridgeFallback('missing-client');
@@ -123,6 +126,8 @@ export async function getLatestBattleConditions(rank: BattleConditionsRank): Pro
 }
 
 export async function getBattleConditionsByDate(rank: BattleConditionsRank, tournamentDate: string): Promise<BattleConditionsRecord | null> {
+  const local = (await listLocalBattleRecords(rank)).find(record => record.tournamentDate === tournamentDate);
+  if (local) return local;
   const client = getAppwriteClient();
   if (!client) {
     logLocalBridgeFallback('missing-client');
@@ -147,6 +152,8 @@ export async function getBattleConditionsByDate(rank: BattleConditionsRank, tour
 }
 
 export async function listRecentBattleConditions(rank: BattleConditionsRank, limit = 25): Promise<BattleConditionsRecord[]> {
+  const local = await listLocalBattleRecords(rank);
+  if (local.length) return [...new Map(local.map(record => [record.tournamentDate, record] as const).reverse()).values()].sort((a,b) => b.tournamentTimestamp - a.tournamentTimestamp).slice(0, limit);
   const client = getAppwriteClient();
   if (!client) {
     logLocalBridgeFallback('missing-client');

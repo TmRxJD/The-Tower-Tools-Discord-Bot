@@ -62,6 +62,7 @@
     "@huggingface/transformers": "^3.8.1",
     "@napi-rs/canvas": "^0.1.97",
     "@tmrxjd/platform": "0.2.4",
+    "broadcast-channel": "7.3.0",
     "canvas": "^3.2.1",
     "dexie": "^4.3.0",
     "discord.js": "^14.25.1",
@@ -71,8 +72,8 @@
     "node-appwrite": "17.2.0",
     "rxdb": "17.1.0",
     "sqlite3": "^5.1.7",
-    "zod": "^4.3.6",
-    "thetowersdk": "^0.10.0"
+    "thetowersdk": "^0.10.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
@@ -93,6 +94,9 @@
       "@napi-rs/canvas",
       "canvas",
       "sqlite3"
-    ]
+    ],
+    "patchedDependencies": {
+      "@tmrxjd/platform@0.2.4": "patches/@tmrxjd__platform@0.2.4.patch"
+    }
   }
 }

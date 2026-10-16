@@ -1,3 +1,4 @@
+import { buildDefineResponse } from '../services/define-response';
 import {
   ApplicationCommandType,
   ContextMenuCommandBuilder,
@@ -20,15 +21,16 @@ export const defineMessageCommand: CommandModule = {
       return;
     }
 
+    await interaction.deferReply({ ephemeral: true });
     const source = interaction.targetMessage?.content ?? '';
     const { text: expanded, changed } = await expandManagedAcronymsInText(source);
     const quoted = quoteText(source);
 
     if (!changed) {
-      await interaction.reply({ content: quoted || defineMessageConfig.noAcronyms, ephemeral: true });
+      await interaction.editReply(buildDefineResponse(quoted || defineMessageConfig.noAcronyms));
       return;
     }
 
-    await interaction.reply({ content: `${quoted}\n\n${expanded}`, ephemeral: true });
+    await interaction.editReply(buildDefineResponse(`${quoted}\n\n${expanded}`));
   },
 };
