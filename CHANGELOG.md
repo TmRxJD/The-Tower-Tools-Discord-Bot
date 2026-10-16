@@ -74,3 +74,7 @@
 - Ensure fatal bootstrap/shutdown exits the process and disconnects before releasing locks; ordinary resumable gateway disconnects no longer shut down services.
 
 
+
+## 2026-10-16 - Platform patch
+
+- Regenerate patches/@tmrxjd__platform@0.2.4.patch in canonical git diff form. The hand-written hunk headers (`@@ -7,1 +7,2 @@`) made pnpm fail with "hunk header integrity check failed", which broke the deploy install step. Same Mythic and battle-payload-store changes; lockfile patch hash updated.
