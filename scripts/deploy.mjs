@@ -34,7 +34,7 @@ const envKeys = [
   'TRACKERAI_KB_CHUNKS_FILE_ID',
   'TRACKERAI_KB_INDEX_FILE_ID',
 ]
-const platformRegistry = getEnv('TMRXJD_PLATFORM_REGISTRY', 'https://registry.npmjs.org')
+const platformRegistry = getEnv('TMRXJD_PLATFORM_REGISTRY', 'https://npm.pkg.github.com')
 
 function getEnv(name, fallback = '') {
   const value = process.env[name]
