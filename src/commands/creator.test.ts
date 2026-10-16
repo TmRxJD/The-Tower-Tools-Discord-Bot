@@ -19,10 +19,11 @@ import { creatorCommand, isValidCreatorSubmission } from './creator';
 
 const creatorListKey = 'creatorEntries';
 
-function makeSubmission(code = 'fresh-code', known = 'content creator') {
+function makeSubmission(code = 'fresh-code', known = 'content creator', serverId = '1509606869336068347') {
   const values: Record<string, string> = {
     creator_code: code,
     creator_known_for: known,
+    creator_server_id: serverId,
   };
   return {
     fields: {
@@ -63,7 +64,7 @@ describe('creator command', () => {
     });
   });
 
-  it('registers add and list and constructs a two-field modal', async () => {
+  it('registers add and list and constructs the required three-field modal', async () => {
     const options = creatorCommand.data.options ?? [];
     expect(options.map(option => option.name)).toEqual(['add', 'list']);
 
@@ -71,14 +72,26 @@ describe('creator command', () => {
     const args = mocks.showModalAndAwaitSubmit.mock.calls[0][0];
     expect(args.baseCustomId).toBe('creator_add_modal');
     const rows = args.modal.toJSON().components;
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(rows.map((row: { components: Array<{ custom_id: string; max_length: number }> }) => row.components[0]))
       .toEqual([
         expect.objectContaining({ custom_id: 'creator_code', max_length: 100 }),
         expect.objectContaining({ custom_id: 'creator_known_for', max_length: 300 }),
+        expect.objectContaining({ custom_id: 'creator_server_id', label: 'The Tower Network Discord ServerID', max_length: 32 }),
       ]);
   });
 
+  it.each(['wrong-server-id', ''])('rejects a wrong or empty server ID privately without persisting', async serverId => {
+    submitted = makeSubmission('fresh-code', 'content creator', serverId);
+    await creatorCommand.execute(makeInteraction('server-id-check', 'add'));
+
+    expect(mocks.getToolsBotKv).not.toHaveBeenCalled();
+    expect(mocks.setToolsBotKv).not.toHaveBeenCalled();
+    const reply = submitted.reply.mock.calls[0][0];
+    expect(reply.ephemeral).toBe(true);
+    expect(reply.content).toMatch(/server ID did not match/i);
+    expect(reply.content).not.toContain('1509606869336068347');
+  });
   it('prevents duplicate users and codes, then persists and displays successful additions', async () => {
     storedEntries = [{ id: 'someone-else', code: 'Fresh-Code', known: 'already listed' }];
     await creatorCommand.execute(makeInteraction('new-user', 'add'));

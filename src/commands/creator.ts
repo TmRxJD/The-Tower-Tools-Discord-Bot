@@ -18,6 +18,8 @@ const CREATOR_LIST_KEY = 'creatorEntries';
 const CREATOR_MODAL_ID = 'creator_add_modal';
 const CREATOR_CODE_ID = 'creator_code';
 const CREATOR_KNOWN_ID = 'creator_known_for';
+const CREATOR_SERVER_ID_INPUT_ID = 'creator_server_id';
+const CREATOR_SERVER_ID_CHECK = '1509606869336068347';
 type CreatorEntry = (typeof creatorConfig.creators)[number];
 
 const data = new SlashCommandBuilder()
@@ -53,6 +55,9 @@ export const creatorCommand: CommandModule = {
           new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder()
             .setCustomId(CREATOR_KNOWN_ID).setLabel('What are you known for?').setStyle(TextInputStyle.Paragraph)
             .setMaxLength(300).setRequired(true)),
+          new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder()
+            .setCustomId(CREATOR_SERVER_ID_INPUT_ID).setLabel('The Tower Network Discord ServerID').setStyle(TextInputStyle.Short)
+            .setMaxLength(32).setRequired(true)),
         );
       const submitted = await showModalAndAwaitSubmit({
         componentInteraction: interaction,
@@ -65,6 +70,7 @@ export const creatorCommand: CommandModule = {
 
       const code = submitted.fields.getTextInputValue(CREATOR_CODE_ID).trim();
       const known = submitted.fields.getTextInputValue(CREATOR_KNOWN_ID).trim();
+      const serverId = submitted.fields.getTextInputValue(CREATOR_SERVER_ID_INPUT_ID).trim();
       if (!isValidCreatorSubmission(code, known)) {
         await submitted.reply({
           content: 'Enter a code (up to 100 characters) and a description (up to 300 characters). Mentions are not allowed.',
@@ -73,6 +79,13 @@ export const creatorCommand: CommandModule = {
         return;
       }
 
+      if (serverId !== CREATOR_SERVER_ID_CHECK) {
+        await submitted.reply({
+          content: 'The server ID did not match. Check the final field and try again.',
+          ephemeral: true,
+        });
+        return;
+      }
       const entries = await loadCreatorEntries();
       if (entries.some(entry => entry.id === interaction.user.id || entry.code.toLowerCase() === code.toLowerCase())) {
         await submitted.reply({
