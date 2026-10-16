@@ -29,7 +29,9 @@ export function registerInteractionRouter(client: ToolsBotClient) {
           }
           return;
         }
-        await resolveAppwriteUserIdForDiscord(interaction.user.id).catch(() => null);
+        if (!command.skipAppwriteIdentityResolution) {
+          await resolveAppwriteUserIdForDiscord(interaction.user.id).catch(() => null);
+        }
         await command.execute(interaction);
         client.persistence?.analytics.log({
           commandName: interaction.commandName,

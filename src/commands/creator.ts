@@ -44,6 +44,7 @@ export function isValidCreatorSubmission(code: string, known: string): boolean {
 
 export const creatorCommand: CommandModule = {
   data: data.toJSON(),
+  skipAppwriteIdentityResolution: true,
   async execute(interaction: ChatInputCommandInteraction) {
     if (interaction.options.getSubcommand(false) === 'add') {
       const modal = new ModalBuilder()

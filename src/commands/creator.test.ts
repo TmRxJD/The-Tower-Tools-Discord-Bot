@@ -65,6 +65,7 @@ describe('creator command', () => {
   });
 
   it('registers add and list and constructs the required three-field modal', async () => {
+    expect(creatorCommand.skipAppwriteIdentityResolution).toBe(true);
     const options = creatorCommand.data.options ?? [];
     expect(options.map(option => option.name)).toEqual(['add', 'list']);
 

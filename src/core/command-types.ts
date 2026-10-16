@@ -15,4 +15,6 @@ export interface CommandModule<TInteraction extends SupportedCommandInteraction 
   execute: ExecuteHandler<TInteraction>;
   autocomplete?: (interaction: AutocompleteInteraction) => Promise<void>;
   cooldownSeconds?: number;
+  /** Skip the optional Appwrite identity lookup when the command does not use that mapping. */
+  skipAppwriteIdentityResolution?: boolean;
 }
