@@ -11,4 +11,4 @@
 *.ico binary
 *.zip binary
 *.db binary
-*.sqlite binary*.patch text eol=lf
+*.sqlite binary
