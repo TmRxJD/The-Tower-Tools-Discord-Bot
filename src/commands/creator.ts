@@ -20,7 +20,10 @@ const CREATOR_CODE_ID = 'creator_code';
 const CREATOR_KNOWN_ID = 'creator_known_for';
 const CREATOR_SERVER_ID_INPUT_ID = 'creator_server_id';
 const CREATOR_SERVER_ID_CHECK = '1509606869336068347';
-type CreatorEntry = (typeof creatorConfig.creators)[number];
+const CREATOR_CODE_MAX_LENGTH = 30;
+const MENTION_PATTERN = /<(?:@[!&]?|#)\d+>|@(?:everyone|here)\b/iu;
+const BARE_LINK_PATTERN = /(^|[\s|(])((?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s|)]*)?)(?=$|[\s|)])/giu;
+type CreatorEntry = { id: string; code: string; known: string };
 
 const data = new SlashCommandBuilder()
   .setName(creatorConfig.name)
@@ -37,9 +40,23 @@ async function loadCreatorEntries(): Promise<CreatorEntry[]> {
   return [...creatorConfig.creators, ...(stored ?? [])];
 }
 
-export function isValidCreatorSubmission(code: string, known: string): boolean {
-  return code.trim().length > 0 && code.length <= 100 && known.trim().length > 0 && known.length <= 300
-    && !/[\n\r@]/u.test(code) && !/[\n\r@]/u.test(known);
+export function getMaxKnownLength(entries: readonly CreatorEntry[]): number {
+  return entries.reduce((max, entry) => Math.max(max, entry.known.length), 1);
+}
+
+/** Collapses line breaks and turns bare domains into full links so Discord renders them as links. */
+export function normalizeCreatorKnown(known: string): string {
+  return known
+    .replace(/\s*[\r\n]+\s*/gu, ' ')
+    .trim()
+    .replace(BARE_LINK_PATTERN, (_match, lead: string, link: string) => `${lead}https://${link}`);
+}
+
+export function isValidCreatorSubmission(code: string, known: string, maxKnownLength: number): boolean {
+  return code.length > 0 && code.length <= CREATOR_CODE_MAX_LENGTH
+    && known.length > 0 && known.length <= maxKnownLength
+    && !/[\r\n]/u.test(code)
+    && !MENTION_PATTERN.test(code) && !MENTION_PATTERN.test(known);
 }
 
 export const creatorCommand: CommandModule = {
@@ -47,15 +64,16 @@ export const creatorCommand: CommandModule = {
   skipAppwriteIdentityResolution: true,
   async execute(interaction: ChatInputCommandInteraction) {
     if (interaction.options.getSubcommand(false) === 'add') {
+      const maxKnownLength = getMaxKnownLength(await loadCreatorEntries());
       const modal = new ModalBuilder()
         .setTitle('Add your creator code')
         .addComponents(
           new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder()
             .setCustomId(CREATOR_CODE_ID).setLabel('Creator code').setStyle(TextInputStyle.Short)
-            .setMaxLength(100).setRequired(true)),
+            .setMaxLength(CREATOR_CODE_MAX_LENGTH).setRequired(true)),
           new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder()
             .setCustomId(CREATOR_KNOWN_ID).setLabel('What are you known for?').setStyle(TextInputStyle.Paragraph)
-            .setMaxLength(300).setRequired(true)),
+            .setMaxLength(maxKnownLength).setRequired(true)),
           new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder()
             .setCustomId(CREATOR_SERVER_ID_INPUT_ID).setLabel('The Tower Network Discord ServerID').setStyle(TextInputStyle.Short)
             .setMaxLength(32).setRequired(true)),
@@ -70,11 +88,11 @@ export const creatorCommand: CommandModule = {
       if (!submitted) return;
 
       const code = submitted.fields.getTextInputValue(CREATOR_CODE_ID).trim();
-      const known = submitted.fields.getTextInputValue(CREATOR_KNOWN_ID).trim();
+      const known = normalizeCreatorKnown(submitted.fields.getTextInputValue(CREATOR_KNOWN_ID));
       const serverId = submitted.fields.getTextInputValue(CREATOR_SERVER_ID_INPUT_ID).trim();
-      if (!isValidCreatorSubmission(code, known)) {
+      if (!isValidCreatorSubmission(code, known, maxKnownLength)) {
         await submitted.reply({
-          content: 'Enter a code (up to 100 characters) and a description (up to 300 characters). Mentions are not allowed.',
+          content: `Enter a code (up to ${CREATOR_CODE_MAX_LENGTH} characters) and a description (up to ${maxKnownLength} characters once links are expanded to https://). Mentions are not allowed.`,
           ephemeral: true,
         });
         return;

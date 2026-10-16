@@ -15,9 +15,11 @@ vi.mock('../services/modal-submit', () => ({
   showModalAndAwaitSubmit: mocks.showModalAndAwaitSubmit,
 }));
 
-import { creatorCommand, isValidCreatorSubmission } from './creator';
+import { getBotConfig } from '../config/bot-config';
+import { creatorCommand, getMaxKnownLength, isValidCreatorSubmission, normalizeCreatorKnown } from './creator';
 
 const creatorListKey = 'creatorEntries';
+const longestKnown = getMaxKnownLength(getBotConfig().commands.creator.creators);
 
 function makeSubmission(code = 'fresh-code', known = 'content creator', serverId = '1509606869336068347') {
   const values: Record<string, string> = {
@@ -76,8 +78,8 @@ describe('creator command', () => {
     expect(rows).toHaveLength(3);
     expect(rows.map((row: { components: Array<{ custom_id: string; max_length: number }> }) => row.components[0]))
       .toEqual([
-        expect.objectContaining({ custom_id: 'creator_code', max_length: 100 }),
-        expect.objectContaining({ custom_id: 'creator_known_for', max_length: 300 }),
+        expect.objectContaining({ custom_id: 'creator_code', max_length: 30 }),
+        expect.objectContaining({ custom_id: 'creator_known_for', max_length: longestKnown }),
         expect.objectContaining({ custom_id: 'creator_server_id', label: 'The Tower Network Discord ServerID', max_length: 32 }),
       ]);
   });
@@ -86,7 +88,6 @@ describe('creator command', () => {
     submitted = makeSubmission('fresh-code', 'content creator', serverId);
     await creatorCommand.execute(makeInteraction('server-id-check', 'add'));
 
-    expect(mocks.getToolsBotKv).not.toHaveBeenCalled();
     expect(mocks.setToolsBotKv).not.toHaveBeenCalled();
     const reply = submitted.reply.mock.calls[0][0];
     expect(reply.ephemeral).toBe(true);
@@ -118,15 +119,29 @@ describe('creator command', () => {
 });
 
 describe('creator submission validation', () => {
-  it('requires nonempty values within their limits and rejects mentions or line breaks', () => {
-    expect(isValidCreatorSubmission('code', 'known for')).toBe(true);
-    expect(isValidCreatorSubmission(' ', 'known for')).toBe(false);
-    expect(isValidCreatorSubmission('a'.repeat(101), 'known for')).toBe(false);
-    expect(isValidCreatorSubmission('code', 'a'.repeat(301))).toBe(false);
-    expect(isValidCreatorSubmission('', 'known for')).toBe(false);
-    expect(isValidCreatorSubmission('code', '')).toBe(false);
-    expect(isValidCreatorSubmission('@everyone', 'known for')).toBe(false);
-    expect(isValidCreatorSubmission('code', '<@123456789012345678>')).toBe(false);
-    expect(isValidCreatorSubmission('code', 'first line\nsecond line')).toBe(false);
+  it('limits codes to 30 characters and descriptions to the longest current one', () => {
+    expect(isValidCreatorSubmission('code', 'known for', 50)).toBe(true);
+    expect(isValidCreatorSubmission('a'.repeat(30), 'known for', 50)).toBe(true);
+    expect(isValidCreatorSubmission('a'.repeat(31), 'known for', 50)).toBe(false);
+    expect(isValidCreatorSubmission('code', 'a'.repeat(50), 50)).toBe(true);
+    expect(isValidCreatorSubmission('code', 'a'.repeat(51), 50)).toBe(false);
+    expect(isValidCreatorSubmission('', 'known for', 50)).toBe(false);
+    expect(isValidCreatorSubmission('code', '', 50)).toBe(false);
+  });
+
+  it('rejects mentions but accepts handles inside links', () => {
+    expect(isValidCreatorSubmission('@everyone', 'known for', 50)).toBe(false);
+    expect(isValidCreatorSubmission('code', '<@123456789012345678>', 50)).toBe(false);
+    expect(isValidCreatorSubmission('code', 'https://www.youtube.com/@Handle', 50)).toBe(true);
+  });
+
+  it('computes the longest known length across entries', () => {
+    expect(getMaxKnownLength([{ id: '1', code: 'a', known: 'abc' }, { id: '2', code: 'b', known: 'abcdef' }])).toBe(6);
+  });
+
+  it('collapses line breaks and expands bare links', () => {
+    expect(normalizeCreatorKnown('Videos\nyoutube.com/@Handle | thetower.lol'))
+      .toBe('Videos https://youtube.com/@Handle | https://thetower.lol');
+    expect(normalizeCreatorKnown('https://a.com/x and Sheets & Tools')).toBe('https://a.com/x and Sheets & Tools');
   });
 });
