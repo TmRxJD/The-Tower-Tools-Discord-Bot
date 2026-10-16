@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import type { ChatInputCommandInteraction } from 'discord.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -145,3 +146,55 @@ describe('creator submission validation', () => {
     expect(normalizeCreatorKnown('https://a.com/x and Sheets & Tools')).toBe('https://a.com/x and Sheets & Tools');
   });
 });
+
+describe('creator list pagination', () => {
+  it('adds Previous/Next buttons when the list outgrows one embed and pages through it', async () => {
+    mocks.getToolsBotKv.mockImplementation(async () => Array.from({ length: 80 }, (_, index) => ({
+      id: `2000000000000000${String(index).padStart(3, '0')}`,
+      code: `stored-${String(index).padStart(2, '0')}`,
+      known: 'k'.repeat(150),
+    })));
+    const collector = new EventEmitter();
+    const register = vi.fn();
+    const unregister = vi.fn();
+    const reply = vi.fn();
+    const editReply = vi.fn(async (_payload: { components: Array<{ toJSON: () => { components: Array<{ disabled: boolean }> } }> }) => {});
+    const interaction = {
+      ...makeInteraction('lister', 'list', reply),
+      client: { scopedInteractionSessions: { register, unregister } },
+      fetchReply: vi.fn(async () => ({ id: 'message-1', createMessageComponentCollector: () => collector })),
+      editReply,
+    } as unknown as ChatInputCommandInteraction;
+
+    await creatorCommand.execute(interaction);
+
+    const first = reply.mock.calls[0][0];
+    expect(first.embeds[0].data.description.length).toBeLessThanOrEqual(4096);
+    expect(first.embeds[0].data.footer.text).toMatch(/Page 1\/\d+/);
+    const [prev, next] = first.components[0].toJSON().components;
+    expect(prev.disabled).toBe(true);
+    expect(next.disabled).toBe(false);
+    expect(register).toHaveBeenCalledWith(expect.objectContaining({ ownerUserId: 'lister', messageId: 'message-1' }));
+
+    const update = vi.fn(async (_payload: { embeds: Array<{ data: { footer: { text: string } } }>; components: Array<{ toJSON: () => { components: Array<{ disabled: boolean }> } }> }) => {});
+    collector.emit('collect', { customId: next.custom_id, user: { id: 'lister' }, update });
+    await new Promise(resolve => setImmediate(resolve));
+    const second = update.mock.calls[0]![0];
+    expect(second.embeds[0].data.footer.text).toMatch(/Page 2\/\d+/);
+    expect(second.components[0].toJSON().components[0].disabled).toBe(false);
+
+    collector.emit('end');
+    await new Promise(resolve => setImmediate(resolve));
+    expect(unregister).toHaveBeenCalled();
+    expect(editReply.mock.calls[0]![0].components[0]!.toJSON().components.every(b => b.disabled)).toBe(true);
+  });
+
+  it('keeps the original single-embed reply when everything fits on one page', async () => {
+    mocks.getToolsBotKv.mockImplementation(async () => []);
+    const reply = vi.fn();
+    await creatorCommand.execute(makeInteraction('lister', 'list', reply));
+    expect(reply.mock.calls[0][0].components).toBeUndefined();
+    expect(reply.mock.calls[0][0].embeds[0].data.footer.text).not.toMatch(/Page/);
+  });
+});
+

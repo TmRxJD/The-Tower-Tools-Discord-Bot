@@ -78,3 +78,7 @@
 ## 2026-10-16 - Platform patch
 
 - Regenerate patches/@tmrxjd__platform@0.2.4.patch in canonical git diff form. The hand-written hunk headers (`@@ -7,1 +7,2 @@`) made pnpm fail with "hunk header integrity check failed", which broke the deploy install step. Same Mythic and battle-payload-store changes; lockfile patch hash updated.
+
+## 2026-10-16 - Paginated creator list
+
+- /creator list now packs whole entries into pages sized to Discord's embed limits (4096 description, 6000 total including title and footer) and adds Previous/Next buttons with a "Page x/y" footer when the list no longer fits on one page, instead of failing. A single oversized entry is truncated rather than breaking the list. Buttons are owner-only and disable after 5 minutes.

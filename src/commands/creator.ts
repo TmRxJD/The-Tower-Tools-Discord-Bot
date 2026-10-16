@@ -1,5 +1,8 @@
 import {
   ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ComponentType,
   EmbedBuilder,
   ModalBuilder,
   SlashCommandBuilder,
@@ -9,17 +12,22 @@ import {
 } from 'discord.js';
 import type { CommandModule } from '../core/command-types';
 import { getBotConfig } from '../config/bot-config';
-import { formatCreatorEntriesDescription, sortCreatorEntriesByCode } from '@tmrxjd/platform/tools';
+import { sortCreatorEntriesByCode } from '@tmrxjd/platform/tools';
+import type { ToolsBotClient } from '../core/tools-bot-client';
+import { getCreatorPageBudget, paginateCreatorEntries } from '../features/creator/creator-pages';
 import { getToolsBotKv, setToolsBotKv } from '../services/idb';
 import { showModalAndAwaitSubmit } from '../services/modal-submit';
 
 const creatorConfig = getBotConfig().commands.creator;
 const CREATOR_LIST_KEY = 'creatorEntries';
+const CREATOR_PAGE_PREV_ID = 'creator_page_prev';
+const CREATOR_PAGE_NEXT_ID = 'creator_page_next';
 const CREATOR_MODAL_ID = 'creator_add_modal';
 const CREATOR_CODE_ID = 'creator_code';
 const CREATOR_KNOWN_ID = 'creator_known_for';
 const CREATOR_SERVER_ID_INPUT_ID = 'creator_server_id';
 const CREATOR_SERVER_ID_CHECK = '1509606869336068347';
+const CREATOR_PAGE_TIMEOUT_MS = 5 * 60 * 1000;
 const CREATOR_CODE_MAX_LENGTH = 30;
 const MENTION_PATTERN = /<(?:@[!&]?|#)\d+>|@(?:everyone|here)\b/iu;
 const BARE_LINK_PATTERN = /(^|[\s|(])((?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s|)]*)?)(?=$|[\s|)])/giu;
@@ -121,14 +129,57 @@ export const creatorCommand: CommandModule = {
     }
 
     const sortedCreators = sortCreatorEntriesByCode(await loadCreatorEntries());
-    const description = formatCreatorEntriesDescription(sortedCreators, creatorConfig.knownForPrefix);
+    const budget = getCreatorPageBudget(creatorConfig.title.length, creatorConfig.footer.length);
+    const pages = paginateCreatorEntries(sortedCreators, creatorConfig.knownForPrefix, budget);
 
-    const embed = new EmbedBuilder()
+    const buildEmbed = (page: number) => new EmbedBuilder()
       .setTitle(creatorConfig.title)
-      .setDescription(description)
+      .setDescription(pages[page])
       .setColor(creatorConfig.color)
-      .setFooter({ text: creatorConfig.footer });
+      .setFooter({ text: pages.length > 1 ? `${creatorConfig.footer} • Page ${page + 1}/${pages.length}` : creatorConfig.footer });
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    if (pages.length === 1) {
+      await interaction.reply({ embeds: [buildEmbed(0)], ephemeral: true });
+      return;
+    }
+
+    const prevId = `${CREATOR_PAGE_PREV_ID}:${interaction.id}`;
+    const nextId = `${CREATOR_PAGE_NEXT_ID}:${interaction.id}`;
+    const buildRow = (page: number, disabled = false) => new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(prevId).setLabel('Previous').setStyle(ButtonStyle.Secondary)
+        .setDisabled(disabled || page === 0),
+      new ButtonBuilder().setCustomId(nextId).setLabel('Next').setStyle(ButtonStyle.Secondary)
+        .setDisabled(disabled || page === pages.length - 1),
+    );
+
+    let page = 0;
+    await interaction.reply({ embeds: [buildEmbed(page)], components: [buildRow(page)], ephemeral: true });
+    const reply = await interaction.fetchReply();
+
+    const client = interaction.client as ToolsBotClient;
+    const scopedSessionId = `creator:${interaction.id}`;
+    client.scopedInteractionSessions.register({
+      sessionId: scopedSessionId,
+      ownerUserId: interaction.user.id,
+      messageId: reply.id,
+      componentCustomIds: [prevId, nextId],
+      ttlMs: CREATOR_PAGE_TIMEOUT_MS,
+    });
+
+    const collector = reply.createMessageComponentCollector({
+      componentType: ComponentType.Button,
+      time: CREATOR_PAGE_TIMEOUT_MS,
+      filter: component => component.user.id === interaction.user.id,
+    });
+    collector.on('collect', async component => {
+      if (component.customId === nextId) page = Math.min(page + 1, pages.length - 1);
+      else if (component.customId === prevId) page = Math.max(page - 1, 0);
+      else return;
+      await component.update({ embeds: [buildEmbed(page)], components: [buildRow(page)] }).catch(() => {});
+    });
+    collector.on('end', async () => {
+      client.scopedInteractionSessions.unregister(scopedSessionId);
+      await interaction.editReply({ embeds: [buildEmbed(page)], components: [buildRow(page, true)] }).catch(() => {});
+    });
   },
 };
