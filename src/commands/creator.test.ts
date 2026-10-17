@@ -17,7 +17,7 @@ vi.mock('../services/modal-submit', () => ({
 }));
 
 import { getBotConfig } from '../config/bot-config';
-import { creatorCommand, getMaxKnownLength, isValidCreatorSubmission, normalizeCreatorKnown } from './creator';
+import { creatorCommand, getMaxKnownLength, isValidCreatorSubmission, mergeCreatorEntries, normalizeCreatorKnown } from './creator';
 
 const creatorListKey = 'creatorEntries';
 const longestKnown = getMaxKnownLength(getBotConfig().commands.creator.creators);
@@ -95,13 +95,9 @@ describe('creator command', () => {
     expect(reply.content).toMatch(/server ID did not match/i);
     expect(reply.content).not.toContain('1509606869336068347');
   });
-  it('prevents duplicate users and codes, then persists and displays successful additions', async () => {
+  it('prevents codes used by someone else, then persists and displays successful additions', async () => {
     storedEntries = [{ id: 'someone-else', code: 'Fresh-Code', known: 'already listed' }];
     await creatorCommand.execute(makeInteraction('new-user', 'add'));
-    expect(mocks.setToolsBotKv).not.toHaveBeenCalled();
-
-    storedEntries = [{ id: 'duplicate-user', code: 'other-code', known: 'already listed' }];
-    await creatorCommand.execute(makeInteraction('duplicate-user', 'add'));
     expect(mocks.setToolsBotKv).not.toHaveBeenCalled();
 
     storedEntries = [];
@@ -116,6 +112,101 @@ describe('creator command', () => {
     const description = reply.mock.calls[0][0].embeds[0].data.description as string;
     expect(description).toContain('fresh-code');
     expect(description).toContain('content creator');
+  });
+});
+
+describe('creator entry updates', () => {
+  let storedEntries: Array<{ id: string; code: string; known: string }>;
+  let submitted: ReturnType<typeof makeSubmission>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    storedEntries = [];
+    submitted = makeSubmission();
+    mocks.getToolsBotKv.mockImplementation(async () => storedEntries);
+    mocks.setToolsBotKv.mockImplementation(async (_key, value) => {
+      storedEntries = value;
+    });
+    mocks.showModalAndAwaitSubmit.mockImplementation(async ({ modal, baseCustomId, componentInteraction }) => {
+      modal.setCustomId(baseCustomId + ':' + componentInteraction.id);
+      return submitted;
+    });
+  });
+
+  const modalFields = () => {
+    const modal = mocks.showModalAndAwaitSubmit.mock.calls[0][0].modal.toJSON();
+    return {
+      title: modal.title as string,
+      inputs: modal.components.map((row: { components: Array<{ custom_id: string; value?: string }> }) => row.components[0]),
+    };
+  };
+
+  it('prefills the modal from the user\'s stored entry and replaces it on resubmit', async () => {
+    storedEntries = [
+      { id: 'other', code: 'other-code', known: 'someone else' },
+      { id: 'returning', code: 'old-code', known: 'old description' },
+    ];
+    submitted = makeSubmission('new-code', 'new description');
+    await creatorCommand.execute(makeInteraction('returning', 'add'));
+
+    const { title, inputs } = modalFields();
+    expect(title).toBe('Update your creator code');
+    expect(inputs[0]).toEqual(expect.objectContaining({ custom_id: 'creator_code', value: 'old-code' }));
+    expect(inputs[1]).toEqual(expect.objectContaining({ custom_id: 'creator_known_for', value: 'old description' }));
+    expect(inputs[2].value).toBeUndefined();
+    expect(storedEntries).toEqual([
+      { id: 'other', code: 'other-code', known: 'someone else' },
+      { id: 'returning', code: 'new-code', known: 'new description' },
+    ]);
+    expect(submitted.reply.mock.calls[0][0].content).toMatch(/updated/i);
+  });
+
+  it('lets someone on the built-in list update via an override and shows only the new entry', async () => {
+    const builtIn = getBotConfig().commands.creator.creators[0];
+    submitted = makeSubmission('renamed', 'fresh description');
+    await creatorCommand.execute(makeInteraction(builtIn.id, 'add'));
+
+    expect(modalFields().inputs[0].value).toBe(builtIn.code);
+    expect(storedEntries).toEqual([{ id: builtIn.id, code: 'renamed', known: 'fresh description' }]);
+
+    const reply = vi.fn();
+    await creatorCommand.execute(makeInteraction(builtIn.id, 'list', reply));
+    const description = reply.mock.calls[0][0].embeds[0].data.description as string;
+    expect(description).toContain('renamed');
+    expect(description.split(`<@${builtIn.id}>`)).toHaveLength(2);
+  });
+
+  it('allows keeping your own code but rejects another user\'s code', async () => {
+    storedEntries = [
+      { id: 'other', code: 'taken', known: 'someone else' },
+      { id: 'returning', code: 'mine', known: 'old description' },
+    ];
+    submitted = makeSubmission('mine', 'only the description changed');
+    await creatorCommand.execute(makeInteraction('returning', 'add'));
+    expect(storedEntries.find(entry => entry.id === 'returning')).toEqual(
+      { id: 'returning', code: 'mine', known: 'only the description changed' },
+    );
+
+    mocks.setToolsBotKv.mockClear();
+    submitted = makeSubmission('TAKEN', 'whatever');
+    await creatorCommand.execute(makeInteraction('returning', 'add'));
+    expect(mocks.setToolsBotKv).not.toHaveBeenCalled();
+    expect(submitted.reply.mock.calls[0][0].content).toMatch(/already used by someone else/i);
+  });
+
+  it('does not rewrite storage when nothing changed', async () => {
+    storedEntries = [{ id: 'returning', code: 'mine', known: 'same' }];
+    submitted = makeSubmission('mine', 'same');
+    await creatorCommand.execute(makeInteraction('returning', 'add'));
+    expect(mocks.setToolsBotKv).not.toHaveBeenCalled();
+    expect(submitted.reply.mock.calls[0][0].content).toMatch(/up to date/i);
+  });
+
+  it('merges stored entries over base entries by user id', () => {
+    expect(mergeCreatorEntries(
+      [{ id: '1', code: 'a', known: 'x' }, { id: '2', code: 'b', known: 'y' }],
+      [{ id: '1', code: 'a2', known: 'x2' }],
+    )).toEqual([{ id: '2', code: 'b', known: 'y' }, { id: '1', code: 'a2', known: 'x2' }]);
   });
 });
 

@@ -82,3 +82,9 @@
 ## 2026-10-16 - Paginated creator list
 
 - /creator list now packs whole entries into pages sized to Discord's embed limits (4096 description, 6000 total including title and footer) and adds Previous/Next buttons with a "Page x/y" footer when the list no longer fits on one page, instead of failing. A single oversized entry is truncated rather than breaking the list. Buttons are owner-only and disable after 5 minutes.
+
+## 2026-10-17 - Update your own creator entry
+
+- /creator add now detects an existing entry for the user, opens the modal as "Update your creator code" prefilled with their current code and description, and replaces the entry on resubmit instead of telling them to contact a moderator. The server ID check still applies.
+- People on the built-in list can update too: stored entries override built-in ones for the same user id.
+- A code already used by a different user is still rejected; keeping your own code is fine. Resubmitting identical values reports "already up to date" without writing.

@@ -38,14 +38,20 @@ const data = new SlashCommandBuilder()
   .setDescription(creatorConfig.description)
   .addSubcommand(subcommand => subcommand
     .setName('add')
-    .setDescription('Add your creator code to the list'))
+    .setDescription('Add your creator code, or update your existing entry'))
   .addSubcommand(subcommand => subcommand
     .setName('list')
     .setDescription('Show known creators and their codes'));
 
+/** Stored entries override built-in ones for the same user, which is how listed creators update themselves. */
+export function mergeCreatorEntries(base: readonly CreatorEntry[], stored: readonly CreatorEntry[]): CreatorEntry[] {
+  const overridden = new Set(stored.map(entry => entry.id));
+  return [...base.filter(entry => !overridden.has(entry.id)), ...stored];
+}
+
 async function loadCreatorEntries(): Promise<CreatorEntry[]> {
   const stored = await getToolsBotKv<CreatorEntry[]>(CREATOR_LIST_KEY);
-  return [...creatorConfig.creators, ...(stored ?? [])];
+  return mergeCreatorEntries(creatorConfig.creators, stored ?? []);
 }
 
 export function getMaxKnownLength(entries: readonly CreatorEntry[]): number {
@@ -72,16 +78,24 @@ export const creatorCommand: CommandModule = {
   skipAppwriteIdentityResolution: true,
   async execute(interaction: ChatInputCommandInteraction) {
     if (interaction.options.getSubcommand(false) === 'add') {
-      const maxKnownLength = getMaxKnownLength(await loadCreatorEntries());
+      const currentEntries = await loadCreatorEntries();
+      const maxKnownLength = getMaxKnownLength(currentEntries);
+      const existing = currentEntries.find(entry => entry.id === interaction.user.id);
+      const codeInput = new TextInputBuilder()
+        .setCustomId(CREATOR_CODE_ID).setLabel('Creator code').setStyle(TextInputStyle.Short)
+        .setMaxLength(CREATOR_CODE_MAX_LENGTH).setRequired(true);
+      const knownInput = new TextInputBuilder()
+        .setCustomId(CREATOR_KNOWN_ID).setLabel('What are you known for?').setStyle(TextInputStyle.Paragraph)
+        .setMaxLength(maxKnownLength).setRequired(true);
+      if (existing) {
+        codeInput.setValue(existing.code.slice(0, CREATOR_CODE_MAX_LENGTH));
+        knownInput.setValue(existing.known.slice(0, maxKnownLength));
+      }
       const modal = new ModalBuilder()
-        .setTitle('Add your creator code')
+        .setTitle(existing ? 'Update your creator code' : 'Add your creator code')
         .addComponents(
-          new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder()
-            .setCustomId(CREATOR_CODE_ID).setLabel('Creator code').setStyle(TextInputStyle.Short)
-            .setMaxLength(CREATOR_CODE_MAX_LENGTH).setRequired(true)),
-          new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder()
-            .setCustomId(CREATOR_KNOWN_ID).setLabel('What are you known for?').setStyle(TextInputStyle.Paragraph)
-            .setMaxLength(maxKnownLength).setRequired(true)),
+          new ActionRowBuilder<TextInputBuilder>().addComponents(codeInput),
+          new ActionRowBuilder<TextInputBuilder>().addComponents(knownInput),
           new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder()
             .setCustomId(CREATOR_SERVER_ID_INPUT_ID).setLabel('The Tower Network Discord ServerID').setStyle(TextInputStyle.Short)
             .setMaxLength(32).setRequired(true)),
@@ -114,17 +128,29 @@ export const creatorCommand: CommandModule = {
         return;
       }
       const entries = await loadCreatorEntries();
-      if (entries.some(entry => entry.id === interaction.user.id || entry.code.toLowerCase() === code.toLowerCase())) {
+      if (entries.some(entry => entry.id !== interaction.user.id && entry.code.toLowerCase() === code.toLowerCase())) {
         await submitted.reply({
-          content: 'You or that creator code is already on the list. Contact a moderator if it needs updating.',
+          content: 'That creator code is already used by someone else. Contact a moderator if it needs correcting.',
           ephemeral: true,
         });
         return;
       }
 
+      const current = entries.find(entry => entry.id === interaction.user.id);
+      if (current && current.code === code && current.known === known) {
+        await submitted.reply({ content: 'Your entry is already up to date.', ephemeral: true });
+        return;
+      }
+
       const stored = await getToolsBotKv<CreatorEntry[]>(CREATOR_LIST_KEY) ?? [];
-      await setToolsBotKv(CREATOR_LIST_KEY, [...stored, { id: interaction.user.id, code, known }]);
-      await submitted.reply({ content: 'Your creator code has been added to the list.', ephemeral: true });
+      const entry = { id: interaction.user.id, code, known };
+      await setToolsBotKv(CREATOR_LIST_KEY, current
+        ? [...stored.filter(item => item.id !== interaction.user.id), entry]
+        : [...stored, entry]);
+      await submitted.reply({
+        content: current ? 'Your creator entry has been updated.' : 'Your creator code has been added to the list.',
+        ephemeral: true,
+      });
       return;
     }
 
