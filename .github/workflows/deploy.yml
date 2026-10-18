@@ -7,17 +7,15 @@ on:
     paths-ignore:
       - '**/*.md'
       - 'docs/**'
-  repository_dispatch:
-    types: [platform-updated]
 
 concurrency:
-  group: toolsbot-deploy-${{ github.event_name == 'repository_dispatch' && 'dispatch' || github.ref_name }}
+  group: toolsbot-production
   # Queue rather than cancel: killing a deploy halfway (mid-install, mid-restart) is worse than
   # waiting. A newer push waits, and only the newest waiting run is kept.
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
   packages: read
 
 # The bot runs from a long-lived checkout on the runner host: its .env.prod, .data (sqlite KV,
@@ -30,7 +28,6 @@ env:
 jobs:
   deploy:
     runs-on: self-hosted
-    if: github.event_name != 'push' || github.actor != 'github-actions[bot]'
     environment: production
     timeout-minutes: 30
     env:
@@ -41,11 +38,11 @@ jobs:
         working-directory: C:/bots/TowerTools/The-Tower-Tools-Discord-Bot
 
     steps:
-      - name: Fast-forward the production checkout
-        # ff-only: a checkout with diverging local commits fails loudly instead of being merged.
-        run: |
-          git pull --ff-only origin main
-          git log -1 --format="Deploying %h %s"
+      - name: Pull and verify the exact pushed revision
+        run: node scripts/runner-policy.mjs sync
+
+      - name: Test deployment policy
+        run: node --test scripts/runner-policy.test.mjs
 
       # Provides registry auth for @tmrxjd/platform (the committed .npmrc carries no token) and Node 22.
       - name: Setup Node.js
@@ -74,10 +71,6 @@ jobs:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           CLIENT_ID: ${{ vars.CLIENT_ID }}
         run: pnpm run deploy:preflight
-
-      - name: Update platform dependency
-        if: github.event_name == 'repository_dispatch'
-        run: pnpm run deploy:platform:update
 
       - name: Install dependencies
         run: pnpm run deploy:install
@@ -121,19 +114,3 @@ jobs:
         # Fails the job (with the error log tail) if the new build crash-loops or drops offline.
         run: pnpm run deploy:verify
 
-      - name: Commit platform dependency bump
-        if: github.event_name == 'repository_dispatch'
-        shell: node {0}
-        run: |
-          const { execSync } = require('child_process')
-          const run = cmd => execSync(cmd, { stdio: 'inherit' })
-          const dirty = execSync('git status --porcelain -- package.json pnpm-lock.yaml').toString().trim()
-          if (!dirty) process.exit(0)
-          run('git config user.name "github-actions[bot]"')
-          run('git config user.email "41898282+github-actions[bot]@users.noreply.github.com"')
-          run('git add package.json pnpm-lock.yaml')
-          run(`git commit -m "chore: bump @tmrxjd/platform to ${process.env.PLATFORM_VERSION}"`)
-          // No checkout step ran, so there are no persisted credentials: authenticate this one push
-          // with the job token the same way actions/checkout does.
-          const basic = Buffer.from(`x-access-token:${process.env.NODE_AUTH_TOKEN}`).toString('base64')
-          run(`git -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${basic}" push origin HEAD:main`)

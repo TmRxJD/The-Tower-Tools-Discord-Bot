@@ -1,3 +1,5 @@
+import { mkdirSync, statSync } from 'node:fs'
+import { requireRunner, assertDeployedRevision } from './runner-policy.mjs'
 import { execSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, rmdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -71,10 +73,18 @@ function writeEnvFile() {
 /**
  * A restart only picks up new code if dist/ was rebuilt first, and `pm2 restart --update-env`
  * does not re-read ecosystem.config.cjs, so changes there never applied.
- * DEPLOY_SKIP_BUILD=true skips the rebuild for callers that just ran it.
+ * Every activation rebuilds the pushed sources; local build-skip overrides are disabled.
  */
 function activateService() {
-  if (getEnv('DEPLOY_SKIP_BUILD') !== 'true') {
+  const sha = requireRunner()
+  const previous = readPm2Service()
+  const errorPath = previous?.pm2_env?.pm_err_log_path
+  let errorBytes = 0
+  try { errorBytes = statSync(errorPath).size } catch { /* first activation */ }
+  mkdirSync('.data', { recursive: true })
+  writeFileSync('.data/deployment-receipt.json', JSON.stringify({ sha, previousPid: previous?.pid ?? null, startedAt: Date.now(), errorPath, errorBytes }))
+  process.env.DEPLOYED_GIT_SHA = sha
+  {
     // In-place compile rather than `build` (which rimrafs dist first): the running bot may
     // lazy-load modules and must not find dist/ missing mid-deploy.
     run('pnpm run build:refresh')
@@ -174,6 +184,13 @@ async function verifyService() {
   }
 
   const finalState = readPm2Service()
+  const receipt = JSON.parse(readFileSync('.data/deployment-receipt.json', 'utf8'))
+  const readiness = undefined
+  assertDeployedRevision(finalState, receipt, requireRunner(), readiness)
+  const errorPath = finalState.pm2_env.pm_err_log_path
+  const errors = readFileSync(errorPath, 'utf8')
+  const priorBytes = errorPath === receipt.errorPath ? receipt.errorBytes : 0
+  if (Buffer.byteLength(errors) > priorBytes) throw new Error('New stderr output since activation; inspect the runner and service logs before accepting deployment.')
   const uptimeSeconds = Math.round((Date.now() - finalState.pm2_env.pm_uptime) / 1000)
   process.stdout.write(`${serviceName} healthy: online for ${uptimeSeconds}s with no restarts over a ${seconds}s check\n`)
 }
@@ -255,6 +272,8 @@ function report() {
     process.stdout.write(`pm2_status=unavailable:${serviceName}\n`)
   }
 }
+
+if (['activate', 'write-env', 'update-platform'].includes(action)) requireRunner()
 
 switch (action) {
   case 'preflight':

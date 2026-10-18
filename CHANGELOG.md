@@ -88,3 +88,7 @@
 - /creator add now detects an existing entry for the user, opens the modal as "Update your creator code" prefilled with their current code and description, and replaces the entry on resubmit instead of telling them to contact a moderator. The server ID check still applies.
 - People on the built-in list can update too: stored entries override built-in ones for the same user id.
 - A code already used by a different user is still rejected; keeping your own code is fine. Resubmitting identical values reports "already up to date" without writing.
+
+## 2026-10-18 - Runner-only deployment
+
+- Require a clean pushed main revision and runner context for production commands; record deployed SHA and fresh process evidence, reject new stderr, and preserve local registry credentials outside Git. Platform updates must be committed and pushed before deployment.

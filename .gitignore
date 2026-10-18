@@ -58,3 +58,6 @@ test-harness/out/
 
 # Local runtime state (last-registered slash command hash, caches)
 .data/
+
+# Local registry credentials; use .npmrc.example for repository defaults
+/.npmrc
