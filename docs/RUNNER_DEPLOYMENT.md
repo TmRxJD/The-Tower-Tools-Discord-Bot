@@ -8,7 +8,7 @@ the triggering GITHUB_SHA must match before production commands run.
 Production npm scripts and deployment activation check runner context. Every
 activation compiles sources, records the expected Git revision and previous PID,
 and passes DEPLOYED_GIT_SHA into PM2. Verification requires a fresh online process
-with that SHA, no restarts during its observation window and no new stderr since
+with that SHA, no restarts during its observation window and no unexpected new stderr since
 activation. ModBot additionally requires fresh Discord gateway readiness bound
 to that process PID. ToolsBot currently has no equivalent Discord readiness
 telemetry: its process checks alone do not prove Discord connectivity.
@@ -26,3 +26,5 @@ Anyone able to edit source, forge environment variables, invoke PM2 directly or
 write production files can bypass them. Strong enforcement requires separate
 deployment identities, filesystem permissions and protected repository settings;
 none of those access or credential changes were made here.
+
+The exact Transformers default-dtype advisory is a known non-error stderr line and remains in the log; every other new nonempty stderr line still fails verification.

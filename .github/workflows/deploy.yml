@@ -42,7 +42,7 @@ jobs:
         run: node scripts/runner-policy.mjs sync
 
       - name: Test deployment policy
-        run: node --test scripts/runner-policy.test.mjs
+        run: node --test scripts/runner-policy.test.mjs scripts/ecosystem-deployment.test.mjs
 
       # Provides registry auth for @tmrxjd/platform (the committed .npmrc carries no token) and Node 22.
       - name: Setup Node.js
@@ -113,4 +113,3 @@ jobs:
       - name: Verify the bot stays up
         # Fails the job (with the error log tail) if the new build crash-loops or drops offline.
         run: pnpm run deploy:verify
-

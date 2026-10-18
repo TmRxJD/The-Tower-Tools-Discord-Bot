@@ -28,6 +28,15 @@ export function assertDeployedRevision(service, receipt, expectedSha, readiness)
     || Date.parse(readiness.utc) < receipt.startedAt)) throw new Error('Discord readiness does not belong to the fresh deployed process.')
 }
 
+export function assertNoNewErrors(text) {
+  // Transformers emits this advisory on stderr even on successful model load.
+  // Keep it in the log; allow only the exact known non-error line.
+  const advisory = 'dtype not specified for "model". Using the default dtype (fp32) for this device (cpu).'
+  if (text.split(/\r?\n/).some(line => line.trim() && line.trim() !== advisory)) {
+    throw new Error('New unexpected stderr since activation; inspect service logs before accepting deployment.')
+  }
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   requireRunner({ synchronize: process.argv[2] === 'sync' })
 }

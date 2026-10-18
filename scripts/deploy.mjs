@@ -1,5 +1,5 @@
 import { mkdirSync, statSync } from 'node:fs'
-import { requireRunner, assertDeployedRevision } from './runner-policy.mjs'
+import { requireRunner, assertDeployedRevision, assertNoNewErrors } from './runner-policy.mjs'
 import { execSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, rmdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -190,7 +190,7 @@ async function verifyService() {
   const errorPath = finalState.pm2_env.pm_err_log_path
   const errors = readFileSync(errorPath, 'utf8')
   const priorBytes = errorPath === receipt.errorPath ? receipt.errorBytes : 0
-  if (Buffer.byteLength(errors) > priorBytes) throw new Error('New stderr output since activation; inspect the runner and service logs before accepting deployment.')
+  assertNoNewErrors(Buffer.from(errors).subarray(priorBytes).toString('utf8'))
   const uptimeSeconds = Math.round((Date.now() - finalState.pm2_env.pm_uptime) / 1000)
   process.stdout.write(`${serviceName} healthy: online for ${uptimeSeconds}s with no restarts over a ${seconds}s check\n`)
 }

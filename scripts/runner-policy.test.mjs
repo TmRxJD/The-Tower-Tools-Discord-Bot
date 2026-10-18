@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { requireRunner, assertDeployedRevision } from './runner-policy.mjs'
+import { requireRunner, assertDeployedRevision, assertNoNewErrors } from './runner-policy.mjs'
 
 const sha = 'a'.repeat(40)
 function fixture() {
@@ -53,3 +53,10 @@ for (const kind of ['wrong-sha', 'old-pid', 'old-start', 'offline', 'wrong-readi
     assert.throws(() => assertDeployedRevision(service, receipt, sha, readiness))
   })
 }
+test('accepts empty stderr and the exact non-error model dtype advisory, retaining errors', () => {
+  const advisory = 'dtype not specified for "model". Using the default dtype (fp32) for this device (cpu).'
+  assert.doesNotThrow(() => assertNoNewErrors(''))
+  assert.doesNotThrow(() => assertNoNewErrors(advisory + '\n'))
+  assert.throws(() => assertNoNewErrors(advisory + '\nError: model load failed'))
+  assert.throws(() => assertNoNewErrors('Unhandled rejection'))
+})

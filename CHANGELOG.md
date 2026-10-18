@@ -92,3 +92,5 @@
 ## 2026-10-18 - Runner-only deployment
 
 - Require a clean pushed main revision and runner context for production commands; record deployed SHA and fresh process evidence, reject new stderr, and preserve local registry credentials outside Git. Platform updates must be committed and pushed before deployment.
+
+- Pass the pushed SHA explicitly through PM2 ecosystem production env; test the mapping and distinguish only the exact harmless Transformers dtype advisory from unexpected stderr.

@@ -16,6 +16,7 @@ module.exports = {
         DEPLOYMENT_MODE: 'dev',
       },
       env_production: {
+        DEPLOYED_GIT_SHA: process.env.DEPLOYED_GIT_SHA,
         NODE_ENV: 'production',
         DEPLOYMENT_MODE: 'prod',
       },
