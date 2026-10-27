@@ -1,5 +1,5 @@
 import { mkdirSync, statSync } from 'node:fs'
-import { requireRunner, assertDeployedRevision, assertNoNewErrors } from './runner-policy.mjs'
+import { requireRunner, assertDeployedRevision, assertNoNewErrors, collectKnownBattleDestinations } from './runner-policy.mjs'
 import { execSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, rmdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -80,9 +80,11 @@ function activateService() {
   const previous = readPm2Service()
   const errorPath = previous?.pm2_env?.pm_err_log_path
   let errorBytes = 0
+  let knownBattleDestinations = []
   try { errorBytes = statSync(errorPath).size } catch { /* first activation */ }
+  try { knownBattleDestinations = collectKnownBattleDestinations(readFileSync(errorPath, 'utf8')) } catch { /* no prior log */ }
   mkdirSync('.data', { recursive: true })
-  writeFileSync('.data/deployment-receipt.json', JSON.stringify({ sha, previousPid: previous?.pid ?? null, startedAt: Date.now(), errorPath, errorBytes }))
+  writeFileSync('.data/deployment-receipt.json', JSON.stringify({ sha, previousPid: previous?.pid ?? null, startedAt: Date.now(), errorPath, errorBytes, knownBattleDestinations }))
   process.env.DEPLOYED_GIT_SHA = sha
   {
     // In-place compile rather than `build` (which rimrafs dist first): the running bot may
@@ -185,12 +187,13 @@ async function verifyService() {
 
   const finalState = readPm2Service()
   const receipt = JSON.parse(readFileSync('.data/deployment-receipt.json', 'utf8'))
-  const readiness = undefined
+  const readiness = JSON.parse(readFileSync('.data/memory-telemetry.json', 'utf8'))
   assertDeployedRevision(finalState, receipt, requireRunner(), readiness)
   const errorPath = finalState.pm2_env.pm_err_log_path
   const errors = readFileSync(errorPath, 'utf8')
   const priorBytes = errorPath === receipt.errorPath ? receipt.errorBytes : 0
-  assertNoNewErrors(Buffer.from(errors).subarray(priorBytes).toString('utf8'))
+  const retainedWarnings = assertNoNewErrors(Buffer.from(errors).subarray(priorBytes).toString('utf8'), receipt.knownBattleDestinations)
+  for (const warning of retainedWarnings) process.stdout.write(`Pre-existing battle destination still requires configuration repair: ${JSON.stringify(warning)}\n`)
   const uptimeSeconds = Math.round((Date.now() - finalState.pm2_env.pm_uptime) / 1000)
   process.stdout.write(`${serviceName} healthy: online for ${uptimeSeconds}s with no restarts over a ${seconds}s check\n`)
 }

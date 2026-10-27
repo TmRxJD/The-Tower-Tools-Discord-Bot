@@ -1,3 +1,12 @@
+## 2026-10-27 - Interaction and settings reliability
+
+- Use one database with two user-keyed collections, avoiding collection exhaustion as new users access settings. Close incomplete initialization before retrying the same database name.
+- Seed and observe each user independently, retain the durable SQLite copy, preserve numeric false settings and make inbound bindings idempotent.
+- Acknowledge stone selections and range submissions before persistence. Contain collector, reconciliation and cleanup failures, with bounded stage, lifecycle, code and correlation diagnostics.
+- Use durable SQLite reads after failed cache writes or seeding reads. Log only structured error details and hashed references.
+- Distinguish invalid, inaccessible and transient battle delivery destinations without clearing subscriptions or delivery receipts. Require fresh process-bound Discord readiness during runner verification.
+- Report a previously failing destination's confirmed Unknown Guild warning separately from process health during deployment; keep its warning and pending state, and continue rejecting new or transient errors.
+
 ## 2026-10-16 - Creator code submissions
 
 - Add the /creator add modal for a creator code and what the creator is known for. The last field checks the entered value against 1509606869336068347 and does not verify membership. Reject empty or overlong values, mentions, incorrect server IDs, duplicate users or codes; persist accepted submissions in SQLite so they appear in /creator list.

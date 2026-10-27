@@ -50,7 +50,7 @@ beforeEach(() => {
   listBattleConditionsSubscriptionsMock.mockReset();
   markBattleConditionsDeliveredMock.mockReset();
   sendBattleConditionsRecordToChannelMock.mockReset();
-  sendBattleConditionsRecordToChannelMock.mockResolvedValue({ ok: true });
+  sendBattleConditionsRecordToChannelMock.mockResolvedValue({ ok: true, messageId: 'fixture-message' });
 });
 
 describe('battle conditions delivery', () => {

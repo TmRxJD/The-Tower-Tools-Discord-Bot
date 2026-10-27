@@ -12,6 +12,7 @@ import {
 import type { BattleConditionsRecord } from './battle-conditions-cloud';
 import { sendBattleConditionsRecordToChannel } from './battle-conditions-discord';
 import { isBattleConditionsRankEnabled } from './battle-conditions-runtime';
+import { diagnosticRef, failureDiagnostics } from './operation-diagnostics';
 
 type LocalBattleConditionsRank = BattleConditionsRank;
 
@@ -66,6 +67,7 @@ async function runDelivery(
       }
 
       try {
+        const diagnostics = { destination: diagnosticRef(`${subscription.guildId}:${channelId}`), record: diagnosticRef(`${rank}:${record.tournamentDate}:${record.sourceMessageUpdatedAt}`), rank, pid: process.pid };
         const sent = await sendBattleConditionsRecordToChannel(client, subscription.guildId, channelId, record);
         if (sent.ok) {
           await markBattleConditionsDelivered({
@@ -74,20 +76,21 @@ async function runDelivery(
             tournamentDate: record.tournamentDate,
             sourceMessageUpdatedAt: record.sourceMessageUpdatedAt,
           });
-          logger.warn('Battle conditions delivery confirmed', { guildId: subscription.guildId, channelId, rank, tournamentDate: record.tournamentDate, sourceUpdatedAt: record.sourceMessageUpdatedAt, messageId: sent.messageId });
+          logger.warn('Battle conditions delivery confirmed', { ...diagnostics, outcome: 'confirmed', receipt: diagnosticRef(sent.messageId) });
           summary.delivered += 1;
           continue;
         }
 
-        logger.warn('Battle conditions delivery target unavailable', { guildId: subscription.guildId, channelId, rank, reason: sent.reason });
+        logger.warn('Battle conditions delivery target unavailable ' + JSON.stringify({ ...diagnostics, reason: sent.reason, stage: sent.stage, classification: sent.classification, code: sent.code, status: sent.status, outcome: 'pending-retained' }));
         summary.failed += 1;
       } catch (error) {
         summary.failed += 1;
         logger.warn('Failed to repost battle conditions', {
-          guildId: subscription.guildId,
+          destination: diagnosticRef(`${subscription.guildId}:${channelId}`),
           rank,
-          channelId,
-          error,
+          pid: process.pid,
+          ...failureDiagnostics(error),
+          outcome: 'pending-retained',
         });
       }
     }

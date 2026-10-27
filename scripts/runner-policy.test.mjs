@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { requireRunner, assertDeployedRevision, assertNoNewErrors } from './runner-policy.mjs'
+import { requireRunner, assertDeployedRevision, assertNoNewErrors, collectKnownBattleDestinations } from './runner-policy.mjs'
 
 const sha = 'a'.repeat(40)
 function fixture() {
@@ -37,7 +37,7 @@ test('accepts fresh process with pushed revision and fresh Discord readiness', (
   assert.doesNotThrow(() => assertDeployedRevision({ pid: 2, pm2_env: { status: 'online', DEPLOYED_GIT_SHA: sha, pm_uptime: now } },
     { sha, previousPid: 1, startedAt: now - 1000 }, sha, { pid: 2, utc: new Date(now).toISOString(), discord: { ready: true } }))
 })
-for (const kind of ['wrong-sha', 'old-pid', 'old-start', 'offline', 'wrong-readiness-pid', 'not-ready', 'stale-readiness']) {
+for (const kind of ['wrong-sha', 'old-pid', 'old-start', 'offline', 'wrong-readiness-pid', 'not-ready', 'stale-readiness', 'missing-readiness']) {
   test(`rejects deployed evidence ${kind}`, () => {
     const now = Date.now()
     const service = { pid: 2, pm2_env: { status: 'online', DEPLOYED_GIT_SHA: sha, pm_uptime: now } }
@@ -50,7 +50,7 @@ for (const kind of ['wrong-sha', 'old-pid', 'old-start', 'offline', 'wrong-readi
     if (kind === 'wrong-readiness-pid') readiness.pid = 1
     if (kind === 'not-ready') readiness.discord.ready = false
     if (kind === 'stale-readiness') readiness.utc = new Date(now - 100_000).toISOString()
-    assert.throws(() => assertDeployedRevision(service, receipt, sha, readiness))
+    assert.throws(() => assertDeployedRevision(service, receipt, sha, kind === 'missing-readiness' ? undefined : readiness))
   })
 }
 test('accepts empty stderr and the exact non-error model dtype advisory, retaining errors', () => {
@@ -60,3 +60,18 @@ test('accepts empty stderr and the exact non-error model dtype advisory, retaini
   assert.throws(() => assertNoNewErrors(advisory + '\nError: model load failed'))
   assert.throws(() => assertNoNewErrors('Unhandled rejection'))
 })
+
+test('reports only a pre-existing destination confirmed Unknown Guild, preserving other errors', () => {
+  const history = "[2026-10-27T13:43:57.906Z] [WARN] Battle conditions delivery target unavailable {\n guildId: '900000000000000001',\n channelId: '900000000000000002',\n reason: 'guild-unavailable'\n}\n"
+  const known = collectKnownBattleDestinations(history)
+  assert.equal(known.length, 1)
+  const details = { destination: known[0], record: 'b'.repeat(16), rank: 'legends', pid: 2, reason: 'guild-unavailable', stage: 'guild-fetch', classification: 'invalid-destination', code: 10004, status: 404, outcome: 'pending-retained' }
+  const warning = d => '[2026-10-27T14:00:00.000Z] [WARN] Battle conditions delivery target unavailable ' + JSON.stringify(d) + '\n'
+  assert.deepEqual(assertNoNewErrors(warning(details), known), [{ destination: known[0], code: 10004, outcome: 'pending-retained' }])
+  assert.deepEqual(collectKnownBattleDestinations(warning(details)), known)
+  for (const change of [{ destination: 'a'.repeat(16) }, { code: 'ECONNRESET' }, { status: 503 }, { outcome: 'discarded' }, { classification: 'transient' }, { stage: 'send-receipt' }, { error: 'new failure' }]) {
+    assert.throws(() => assertNoNewErrors(warning({ ...details, ...change }), known))
+  }
+  assert.throws(() => assertNoNewErrors(warning(details)))
+  assert.throws(() => assertNoNewErrors(warning(details) + 'Unhandled rejection', known))
+});
