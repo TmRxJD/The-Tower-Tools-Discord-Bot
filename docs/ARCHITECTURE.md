@@ -51,3 +51,15 @@ src/
 
 - ToolsBot now follows the same core routing model as ModBot and TrackerBot: one router, one kind-aware registry, quiet fallthrough for unclaimed interactions, and shared helpers for owned modal waits.
 - Feature sets still differ across bots, but the interaction framework contract should stay aligned across all three repositories.
+
+## Local user-state storage
+
+Settings use one local RxDB database named `tools_bot_rxdb_shared_user_state`, with
+`shared_user_settings` and `lab_settings` collections keyed by the existing user ID.
+The installed Node IndexedDB adapter defaults to fake-indexeddb (memory); an already
+configured SQLite engine retains its existing `.data/indexeddb` backing-file path.
+No storage engine, connection credential, filesystem permission or remote Appwrite
+collection is changed. The SQLite settings rows remain the durable copy and are
+seeded lazily per user into the local RxDB cache. This needs no remote schema
+provisioning, historical replay or manual migration. Incomplete database creation
+is closed before retrying; change notifications are filtered to the affected user.

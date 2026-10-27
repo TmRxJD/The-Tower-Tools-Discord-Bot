@@ -1,5 +1,6 @@
 import { logger } from '../core/logger';
-import { getActiveToolsUserStateRxDatabase, getOrInitToolsUserStateRxDatabase } from './database-manager';
+import { getOrInitToolsUserStateRxDatabase } from './database-manager';
+import { diagnosticRef } from '../services/operation-diagnostics';
 
 export type ToolsUserStateInboundChangeHandler = (input: {
   userId: string;
@@ -34,14 +35,15 @@ export async function bindToolsUserStateRxDBInboundSync(userId: string): Promise
     return;
   }
 
-  subscriptionsByUser.get(normalizedUserId)?.unsubscribe();
+  if (subscriptionsByUser.has(normalizedUserId)) return;
 
   const db = await getOrInitToolsUserStateRxDatabase(normalizedUserId);
-  const sharedSubscription = db.shared_user_settings.find().$.subscribe(() => {
-    notifyInboundChange(normalizedUserId, 'shared_user_settings');
+  if (subscriptionsByUser.has(normalizedUserId)) return;
+  const sharedSubscription = db.shared_user_settings.$.subscribe((change: { documentData: { userId: string } }) => {
+    if (change.documentData.userId === normalizedUserId) notifyInboundChange(normalizedUserId, 'shared_user_settings');
   });
-  const labSubscription = db.lab_settings.find().$.subscribe(() => {
-    notifyInboundChange(normalizedUserId, 'lab_settings');
+  const labSubscription = db.lab_settings.$.subscribe((change: { documentData: { userId: string } }) => {
+    if (change.documentData.userId === normalizedUserId) notifyInboundChange(normalizedUserId, 'lab_settings');
   });
 
   subscriptionsByUser.set(normalizedUserId, {
@@ -60,6 +62,6 @@ export function unbindToolsUserStateRxDBInboundSync(userId: string): void {
 
 export function logToolsUserStateInboundChanges(): void {
   registerToolsUserStateInboundChangeHandler(({ userId, collection }) => {
-    logger.info('[rxdb] tools user-state updated', { userId, collection });
+    logger.info('[rxdb] tools user-state updated', { correlation: diagnosticRef(userId), collection });
   });
 }

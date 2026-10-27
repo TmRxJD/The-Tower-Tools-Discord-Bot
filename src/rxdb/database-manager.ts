@@ -1,11 +1,14 @@
 import type { ToolsUserStateRxDatabase } from './init-database';
 import { initToolsUserStateRxDatabase } from './init-database';
 
-const databaseByScope = new Map<string, ToolsUserStateRxDatabase>();
-const initPromiseByScope = new Map<string, Promise<ToolsUserStateRxDatabase>>();
+// Documents already use userId as their primary key. Two shared collections avoid
+// retaining two collections for every user (and exhausting RxDB's collection cap).
+const SHARED_SCOPE = 'shared_user_state';
+let database: ToolsUserStateRxDatabase | null = null;
+let initializing: Promise<ToolsUserStateRxDatabase> | null = null;
 
 export function getToolsUserStateDatabaseCounts(): { open: number; initializing: number } {
-  return { open: databaseByScope.size, initializing: initPromiseByScope.size };
+  return { open: database ? 1 : 0, initializing: initializing ? 1 : 0 };
 }
 
 export async function getOrInitToolsUserStateRxDatabase(scopeId: string): Promise<ToolsUserStateRxDatabase> {
@@ -14,29 +17,16 @@ export async function getOrInitToolsUserStateRxDatabase(scopeId: string): Promis
     throw new Error('Tools user-state RxDB scope id is required.');
   }
 
-  const cached = databaseByScope.get(normalizedScope);
-  if (cached) {
-    return cached;
+  if (database) return database;
+  if (!initializing) {
+    initializing = initToolsUserStateRxDatabase(SHARED_SCOPE).then(db => {
+      database = db;
+      return db;
+    }).finally(() => { initializing = null; });
   }
-
-  const inFlight = initPromiseByScope.get(normalizedScope);
-  if (inFlight) {
-    return inFlight;
-  }
-
-  const initPromise = initToolsUserStateRxDatabase(normalizedScope).then((db) => {
-    databaseByScope.set(normalizedScope, db);
-    initPromiseByScope.delete(normalizedScope);
-    return db;
-  }).catch((error) => {
-    initPromiseByScope.delete(normalizedScope);
-    throw error;
-  });
-
-  initPromiseByScope.set(normalizedScope, initPromise);
-  return initPromise;
+  return initializing;
 }
 
 export function getActiveToolsUserStateRxDatabase(scopeId: string): ToolsUserStateRxDatabase | null {
-  return databaseByScope.get(scopeId.trim()) ?? null;
+  return scopeId.trim() ? database : null;
 }

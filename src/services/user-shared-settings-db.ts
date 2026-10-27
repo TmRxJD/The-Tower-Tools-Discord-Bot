@@ -1,3 +1,4 @@
+import { diagnosticRef, failureDiagnostics } from './operation-diagnostics';
 import {
   buildSyncedStateReconcileResult,
   defaultSharedUserToolSettings,
@@ -39,7 +40,7 @@ async function loadLocalSharedSettingsLegacySqlite(userId: string): Promise<{ st
         dateFormatPreference: row.dateFormatPreference,
         decimalSeparatorPreference: row.decimalSeparatorPreference,
         runDeltaMode: row.runDeltaMode,
-        useSharedToolInputs: row.useSharedToolInputs,
+        useSharedToolInputs: typeof row.useSharedToolInputs === 'number' ? row.useSharedToolInputs !== 0 : row.useSharedToolInputs,
       })
     : { ...defaultSharedUserToolSettings }
 
@@ -71,8 +72,9 @@ async function loadLocalSharedSettings(userId: string): Promise<{ state: LocalSh
     const { loadSharedSettingsFromRxDB } = await import('../rxdb/user-state-rxdb-store.js')
     return await loadSharedSettingsFromRxDB(userId)
   } catch (error) {
-    logger.warn('[shared-settings] RxDB read failed; falling back to legacy sqlite', { userId, error })
-    return loadLocalSharedSettingsLegacySqlite(userId)
+    const fallback = await loadLocalSharedSettingsLegacySqlite(userId);
+    logger.warn('[shared-settings] RxDB read failed; using durable sqlite', { ...failureDiagnostics(error), correlation: diagnosticRef(userId), pid: process.pid, outcome: 'sqlite-read' });
+    return fallback;
   }
 }
 
@@ -84,7 +86,7 @@ async function saveLocalSharedSettings(userId: string, settings: LocalSharedUser
     const { saveSharedSettingsToRxDB } = await import('../rxdb/user-state-rxdb-store.js')
     await saveSharedSettingsToRxDB(userId, settings)
   } catch (error) {
-    logger.warn('[shared-settings] RxDB write failed; sqlite copy is saved', { userId, error })
+    logger.warn('[shared-settings] RxDB write failed; sqlite copy is saved', { ...failureDiagnostics(error), correlation: diagnosticRef(userId), pid: process.pid, operation: 'write', outcome: 'sqlite-saved-cache-unavailable' })
   }
 }
 
@@ -93,7 +95,7 @@ export async function getUserSharedSettings(userId: string): Promise<LocalShared
     const local = await loadLocalSharedSettings(userId)
     return local.state
   } catch (error) {
-    logger.warn('Failed to read shared user settings, using defaults', error)
+    logger.warn('Failed to read shared user settings, using defaults', failureDiagnostics(error))
     return { ...defaultSharedUserToolSettings }
   }
 }
@@ -159,7 +161,7 @@ export async function saveUserSharedSettings(userId: string, settings: LocalShar
       send: async payload => saveUserSharedSettingsCloud(userId, payload as unknown as LocalSharedUserToolSettings),
     })
   } catch (error) {
-    logger.warn('Failed to save shared user settings', error)
+    logger.warn('Failed to save shared user settings', failureDiagnostics(error))
   }
 }
 

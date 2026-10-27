@@ -1,4 +1,6 @@
 import { enforceOptions } from 'broadcast-channel';
+import { atOperationStage, failureDiagnostics } from '../services/operation-diagnostics';
+import { logger } from '../core/logger';
 import type { RxCollection, RxDatabase, RxJsonSchema } from 'rxdb';
 import { addRxPlugin, createRxDatabase } from 'rxdb/plugins/core';
 import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema';
@@ -43,7 +45,7 @@ function asRxJsonSchema(schema: ToolsUserStateRxJsonSchema): RxJsonSchema<ToolsU
 export async function initToolsUserStateRxDatabase(scopeId: string): Promise<ToolsUserStateRxDatabase> {
   ensureToolsUserStateNodeStorage();
 
-  const db = await createRxDatabase({
+  const db = await atOperationStage('rxdb-init', 'create-database', () => createRxDatabase({
     name: buildTrackerRunRxDatabaseName(RXDB_SCOPE_PREFIX, scopeId),
     // Dexie reads the IndexedDB global once, when it loads, which is before the Node implementation is
     // installed. Handing it the installed implementation explicitly is what lets it open at all.
@@ -51,16 +53,24 @@ export async function initToolsUserStateRxDatabase(scopeId: string): Promise<Too
       indexedDB: (globalThis as { indexedDB?: IDBFactory }).indexedDB,
       IDBKeyRange: (globalThis as { IDBKeyRange?: typeof IDBKeyRange }).IDBKeyRange,
     }),
-  }) as ToolsUserStateRxDatabase;
+  })) as ToolsUserStateRxDatabase;
 
-  await db.addCollections({
-    shared_user_settings: {
-      schema: asRxJsonSchema(toolsSharedUserSettingsRxJsonSchema),
-    },
-    lab_settings: {
-      schema: asRxJsonSchema(toolsLabSettingsRxJsonSchema),
-    },
-  });
+  try {
+    await atOperationStage('rxdb-init', 'add-collections', () => db.addCollections({
+      shared_user_settings: {
+        schema: asRxJsonSchema(toolsSharedUserSettingsRxJsonSchema),
+      },
+      lab_settings: {
+        schema: asRxJsonSchema(toolsLabSettingsRxJsonSchema),
+      },
+    }));
+  } catch (error) {
+    // A partially initialized RxDatabase still reserves its name and collections.
+    // Release it before allowing the manager to retry, preventing follow-on DB8.
+    try { await db.close(); }
+    catch (closeError) { logger.error('[rxdb] incomplete initialization cleanup failed', { ...failureDiagnostics(closeError), operation: 'rxdb-init', stage: 'close-incomplete', pid: process.pid }); }
+    throw error;
+  }
 
   return db;
 }

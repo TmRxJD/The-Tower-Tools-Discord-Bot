@@ -1,3 +1,4 @@
+import { diagnosticRef, failureDiagnostics } from './operation-diagnostics';
 import { getToolsBotDb } from './idb';
 import { logger } from '../core/logger';
 import { loadUserLabSettingsCloud, saveUserLabSettingsCloud } from './user-lab-cloud';
@@ -50,7 +51,7 @@ async function isCloudSyncEnabledForUser(userId: string): Promise<boolean> {
   try {
     return (await getEffectiveUserSharedSettings(userId)).cloudSyncEnabled;
   } catch (error) {
-    logger.warn('Failed to resolve shared settings for lab sync gating', error);
+    logger.warn('Failed to resolve shared settings for lab sync gating', failureDiagnostics(error));
     return false;
   }
 }
@@ -78,6 +79,7 @@ async function loadLocalUserLabSettingsLegacySqlite(userId: string): Promise<{ s
     state: normalizeUserLabSettings({
       ...DEFAULT_SETTINGS,
       ...row,
+      hideMaxedLabs: typeof row.hideMaxedLabs === 'number' ? row.hideMaxedLabs !== 0 : row.hideMaxedLabs,
       labLevels: row.labLevels ?? {},
     }),
     updatedAt: Number.isFinite(Number(row.updatedAt)) ? Number(row.updatedAt) : null,
@@ -104,8 +106,9 @@ async function loadLocalUserLabSettings(userId: string): Promise<{ state: UserLa
     const { loadLabSettingsFromRxDB } = await import('../rxdb/user-state-rxdb-store.js');
     return await loadLabSettingsFromRxDB(userId);
   } catch (error) {
-    logger.warn('[lab-settings] RxDB read failed; falling back to legacy sqlite', { userId, error });
-    return loadLocalUserLabSettingsLegacySqlite(userId);
+    const fallback = await loadLocalUserLabSettingsLegacySqlite(userId);
+    logger.warn('[lab-settings] RxDB read failed; using durable sqlite', { ...failureDiagnostics(error), correlation: diagnosticRef(userId), pid: process.pid, outcome: 'sqlite-read' });
+    return fallback;
   }
 }
 
@@ -117,7 +120,7 @@ async function saveLocalUserLabSettings(userId: string, settings: UserLabSetting
     const { saveLabSettingsToRxDB } = await import('../rxdb/user-state-rxdb-store.js');
     await saveLabSettingsToRxDB(userId, settings);
   } catch (error) {
-    logger.warn('[lab-settings] RxDB write failed; sqlite copy is saved', { userId, error });
+    logger.warn('[lab-settings] RxDB write failed; sqlite copy is saved', { ...failureDiagnostics(error), correlation: diagnosticRef(userId), pid: process.pid, operation: 'write', outcome: 'sqlite-saved-cache-unavailable' });
   }
 }
 
@@ -126,7 +129,7 @@ export async function getUserLabSettings(userId: string, _context: LabCloudConte
     const local = await loadLocalUserLabSettings(userId);
     return local.state ?? { ...DEFAULT_SETTINGS, labLevels: {} };
   } catch (error) {
-    logger.warn('Failed to read lab settings, using defaults', error);
+    logger.warn('Failed to read lab settings, using defaults', failureDiagnostics(error));
     return { ...DEFAULT_SETTINGS, labLevels: {} };
   }
 }
@@ -149,7 +152,7 @@ export async function saveUserLabSettings(userId: string, settings: UserLabSetti
       },
     });
   } catch (error) {
-    logger.warn('Failed to save lab settings', error);
+    logger.warn('Failed to save lab settings', failureDiagnostics(error));
   }
 }
 
