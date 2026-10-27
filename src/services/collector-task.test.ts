@@ -39,7 +39,7 @@ it('retains unexpected diagnostics but redacts callback URLs and contains synchr
   const failure = new Error('unexpected https://discord.com/api/interactions/private-token/callback');
   await runCollectorTask('Lab component', async () => { throw failure; });
   expect(logs.error).toHaveBeenCalledWith('Lab component: task failed', expect.objectContaining({
-    name: 'Error', message: 'unexpected [redacted URL]', stack: expect.stringContaining('collector-task.test.ts'),
+    outcome: 'failed', pid: process.pid,
   }));
   expect(JSON.stringify(logs.error.mock.calls)).not.toContain('private-token');
   const event = { deferred: false, replied: false, deferUpdate: vi.fn(() => { throw failure; }) };

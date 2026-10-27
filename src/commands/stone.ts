@@ -1,3 +1,6 @@
+import { deferCollectorUpdate, runCollectorTask } from '../services/collector-task'
+import { cleanupEphemeralSession, ephemeralCollectorTimeout } from '../services/ephemeral-session-cleanup'
+import { atOperationStage } from '../services/operation-diagnostics'
 import {
   ActionRowBuilder,
   AttachmentBuilder,
@@ -449,10 +452,10 @@ export const stoneCommand: CommandModule = {
     })
 
     if (shouldPersistInitialState) {
-      void persistState()
+      void runCollectorTask('Stone initial persistence', persistState)
     }
 
-    void (async () => {
+    void runCollectorTask('Stone cloud reconciliation', async () => {
       const reconcile = await reconcileUserCommandSharedState(storageUserId, 'stone', normalizeStoneSharedState)
       await runCloudReconcileUi<StoneSharedState>({
         interaction,
@@ -473,7 +476,7 @@ export const stoneCommand: CommandModule = {
           await interaction.editReply({ embeds: [updatedRender.embed], components: buildComponents(), files: updatedRender.files })
         },
       })
-    })()
+    })
 
     const reply = await interaction.fetchReply()
     if (!('createMessageComponentCollector' in reply)) {
@@ -481,7 +484,7 @@ export const stoneCommand: CommandModule = {
     }
 
     const collector = reply.createMessageComponentCollector({
-      time: stoneConfig.behavior.collectorTimeoutMs,
+      time: Math.max(1, ephemeralCollectorTimeout(interaction.createdTimestamp, stoneConfig.behavior.collectorTimeoutMs)),
       filter: i => i.user.id === interaction.user.id,
     })
     const client = interaction.client as ToolsBotClient
@@ -502,113 +505,132 @@ export const stoneCommand: CommandModule = {
       ttlMs: stoneConfig.behavior.collectorTimeoutMs,
     })
 
-    collector.on('collect', async componentInteraction => {
-      if (componentInteraction.isButton() && componentInteraction.customId === STONE_SHARE_BUTTON_ID) {
-        await shareCurrentRender(componentInteraction, {
-          commandName: stoneConfig.name,
-          render: async () => {
-            const rendered = await createRender()
-            return { embeds: [rendered.embed], files: rendered.files }
-          },
-        })
-        return
-      }
+    collector.on('collect', componentInteraction => {
+      let stage = 'dispatch'
+      let diagnosticInteraction: Pick<typeof componentInteraction, 'id' | 'createdTimestamp' | 'deferred' | 'replied'> = componentInteraction
+      void runCollectorTask('Stone component', async () => {
+        if (componentInteraction.isButton() && componentInteraction.customId === STONE_SHARE_BUTTON_ID) {
+          await shareCurrentRender(componentInteraction, {
+            commandName: stoneConfig.name,
+            render: async () => {
+              const rendered = await createRender()
+              return { embeds: [rendered.embed], files: rendered.files }
+            },
+          })
+          return
+        }
 
-      if (componentInteraction.customId === stoneConfig.ids.weaponSelect && componentInteraction.isStringSelectMenu()) {
-        selectedWeaponName = componentInteraction.values[0] ?? selectedWeaponName
-        selectedStats = []
-        startLevel = stoneConfig.defaults.startLevel
-        requestedTargetLevel = resolveDefaultStoneTargetLevel(selectedWeaponName, selectedStats, startLevel)
-        await persistState()
-        await componentInteraction.deferUpdate()
-        const updatedRender = await createRender()
-        await interaction.editReply({ embeds: [updatedRender.embed], components: buildComponents(), files: updatedRender.files })
-        return
-      }
-
-      if (componentInteraction.customId === stoneConfig.ids.statSelect && componentInteraction.isStringSelectMenu()) {
-        const availableNames = resolveAvailableStoneStats(selectedWeaponName).map(stat => stat.name)
-        const next = componentInteraction.values
-          .filter(value => value !== 'all')
-          .filter(value => availableNames.includes(value))
-        selectedStats = componentInteraction.values.includes('all') || next.length === 0 || next.length === availableNames.length
-          ? []
-          : next
-        if (requestedTargetLevel === null) {
+        if (componentInteraction.customId === stoneConfig.ids.weaponSelect && componentInteraction.isStringSelectMenu()) {
+          stage = 'acknowledge-selection'
+          await deferCollectorUpdate(componentInteraction)
+          selectedWeaponName = componentInteraction.values[0] ?? selectedWeaponName
+          selectedStats = []
+          startLevel = stoneConfig.defaults.startLevel
           requestedTargetLevel = resolveDefaultStoneTargetLevel(selectedWeaponName, selectedStats, startLevel)
-        }
-        await persistState()
-        await componentInteraction.deferUpdate()
-        const updatedRender = await createRender()
-        await interaction.editReply({ embeds: [updatedRender.embed], components: buildComponents(), files: updatedRender.files })
-        return
-      }
-
-      if (componentInteraction.customId === stoneConfig.ids.setRange && componentInteraction.isButton()) {
-        const maxLevel = resolveStoneMaxLevel(selectedWeaponName, selectedStats) ?? 30
-        const defaultTargetLevel = requestedTargetLevel ?? getDefaultLevelRange(startLevel, maxLevel).targetLevel
-        const modal = new ModalBuilder()
-          .setCustomId(stoneConfig.ids.rangeModal)
-          .setTitle(stoneConfig.ui.rangeModalTitle)
-          .addComponents(
-            new ActionRowBuilder<TextInputBuilder>().addComponents(
-              new TextInputBuilder()
-                .setCustomId(stoneConfig.ids.startLevelInput)
-                .setLabel(`${stoneConfig.ui.startLevelLabel} (0-${maxLevel})`)
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true)
-                .setValue(String(startLevel)),
-            ),
-            new ActionRowBuilder<TextInputBuilder>().addComponents(
-              new TextInputBuilder()
-                .setCustomId(stoneConfig.ids.targetLevelInput)
-                .setLabel(`${stoneConfig.ui.targetLevelLabel} (0-${maxLevel})`)
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true)
-                .setValue(String(Math.max(startLevel, Math.min(defaultTargetLevel, maxLevel)))),
-            ),
-          )
-
-        const submitted = await showModalAndAwaitSubmit({
-          componentInteraction,
-          modal,
-          baseCustomId: stoneConfig.ids.rangeModal,
-          userId: interaction.user.id,
-          timeoutMs: stoneConfig.behavior.modalSubmitTimeoutMs,
-        })
-        if (!submitted) {
+          stage = 'persist-selection'
+          await persistState()
+          stage = 'render'
+          const updatedRender = await createRender()
+          stage = 'edit-response'
+          await interaction.editReply({ embeds: [updatedRender.embed], components: buildComponents(), files: updatedRender.files })
           return
         }
 
-        const nextStart = Number.parseInt(submitted.fields.getTextInputValue(stoneConfig.ids.startLevelInput), 10)
-        const targetRaw = submitted.fields.getTextInputValue(stoneConfig.ids.targetLevelInput).trim()
-        const nextTarget: number | null = targetRaw.length > 0 ? Number.parseInt(targetRaw, 10) : null
-
-        if (!Number.isFinite(nextStart) || nextStart < 0 || (nextTarget != null && (!Number.isFinite(nextTarget) || nextTarget < 0))) {
-          await submitted.reply({ content: stoneConfig.ui.invalidInput, ephemeral: true })
+        if (componentInteraction.customId === stoneConfig.ids.statSelect && componentInteraction.isStringSelectMenu()) {
+          stage = 'acknowledge-selection'
+          await deferCollectorUpdate(componentInteraction)
+          const availableNames = resolveAvailableStoneStats(selectedWeaponName).map(stat => stat.name)
+          const next = componentInteraction.values
+            .filter(value => value !== 'all')
+            .filter(value => availableNames.includes(value))
+          selectedStats = componentInteraction.values.includes('all') || next.length === 0 || next.length === availableNames.length
+            ? []
+            : next
+          if (requestedTargetLevel === null) {
+            requestedTargetLevel = resolveDefaultStoneTargetLevel(selectedWeaponName, selectedStats, startLevel)
+          }
+          stage = 'persist-selection'
+          await persistState()
+          stage = 'render'
+          const updatedRender = await createRender()
+          stage = 'edit-response'
+          await interaction.editReply({ embeds: [updatedRender.embed], components: buildComponents(), files: updatedRender.files })
           return
         }
 
-        startLevel = nextStart
-        requestedTargetLevel = nextTarget
+        if (componentInteraction.customId === stoneConfig.ids.setRange && componentInteraction.isButton()) {
+          const maxLevel = resolveStoneMaxLevel(selectedWeaponName, selectedStats) ?? 30
+          const defaultTargetLevel = requestedTargetLevel ?? getDefaultLevelRange(startLevel, maxLevel).targetLevel
+          const modal = new ModalBuilder()
+            .setCustomId(stoneConfig.ids.rangeModal)
+            .setTitle(stoneConfig.ui.rangeModalTitle)
+            .addComponents(
+              new ActionRowBuilder<TextInputBuilder>().addComponents(
+                new TextInputBuilder()
+                  .setCustomId(stoneConfig.ids.startLevelInput)
+                  .setLabel(`${stoneConfig.ui.startLevelLabel} (0-${maxLevel})`)
+                  .setStyle(TextInputStyle.Short)
+                  .setRequired(true)
+                  .setValue(String(startLevel)),
+              ),
+              new ActionRowBuilder<TextInputBuilder>().addComponents(
+                new TextInputBuilder()
+                  .setCustomId(stoneConfig.ids.targetLevelInput)
+                  .setLabel(`${stoneConfig.ui.targetLevelLabel} (0-${maxLevel})`)
+                  .setStyle(TextInputStyle.Short)
+                  .setRequired(true)
+                  .setValue(String(Math.max(startLevel, Math.min(defaultTargetLevel, maxLevel)))),
+              ),
+            )
 
-        await persistState()
-        await submitted.deferUpdate()
-        const updatedRender = await createRender()
-        await interaction.editReply({ embeds: [updatedRender.embed], components: buildComponents(), files: updatedRender.files })
-        return
-      }
+          stage = 'modal-wait'
+          const submitted = await showModalAndAwaitSubmit({
+            componentInteraction,
+            modal,
+            baseCustomId: stoneConfig.ids.rangeModal,
+            userId: interaction.user.id,
+            timeoutMs: stoneConfig.behavior.modalSubmitTimeoutMs,
+          })
+          if (!submitted) {
+            return
+          }
+          diagnosticInteraction = submitted
+          stage = 'modal-validation'
 
-      await componentInteraction.reply({ content: stoneConfig.ui.notYourSession, ephemeral: true })
+          const nextStart = Number.parseInt(submitted.fields.getTextInputValue(stoneConfig.ids.startLevelInput), 10)
+          const targetRaw = submitted.fields.getTextInputValue(stoneConfig.ids.targetLevelInput).trim()
+          const nextTarget: number | null = targetRaw.length > 0 ? Number.parseInt(targetRaw, 10) : null
+
+          if (!Number.isFinite(nextStart) || nextStart < 0 || (nextTarget != null && (!Number.isFinite(nextTarget) || nextTarget < 0))) {
+            await submitted.reply({ content: stoneConfig.ui.invalidInput, ephemeral: true })
+            return
+          }
+
+          stage = 'acknowledge-modal'
+          await atOperationStage('stone', stage, () => deferCollectorUpdate(submitted))
+          startLevel = nextStart
+          requestedTargetLevel = nextTarget
+
+          stage = 'persist-selection'
+          await persistState()
+          stage = 'render'
+          const updatedRender = await createRender()
+          stage = 'edit-response'
+          await interaction.editReply({ embeds: [updatedRender.embed], components: buildComponents(), files: updatedRender.files })
+          return
+        }
+
+        await componentInteraction.reply({ content: stoneConfig.ui.notYourSession, ephemeral: true })
+      }, { interaction: () => diagnosticInteraction, stage: () => stage })
     })
 
-    collector.on('end', async () => {
+    collector.on('end', () => {
       client.scopedInteractionSessions.unregister(scopedSessionId)
-      await interaction.editReply({
+      void runCollectorTask('Stone session cleanup', () => cleanupEphemeralSession(interaction.createdTimestamp, () => interaction.editReply({
         content: stoneConfig.ui.sessionTimedOut,
         embeds: [],
         components: [],
-      }).catch(() => {})
+      })))
     })
   },
 }
