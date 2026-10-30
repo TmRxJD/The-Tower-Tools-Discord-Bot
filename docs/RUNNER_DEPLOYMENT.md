@@ -9,9 +9,8 @@ Production npm scripts and deployment activation check runner context. Every
 activation compiles sources, records the expected Git revision and previous PID,
 and passes DEPLOYED_GIT_SHA into PM2. Verification requires a fresh online process
 with that SHA, no restarts during its observation window and no unexpected new stderr since
-activation. ModBot additionally requires fresh Discord gateway readiness bound
-to that process PID. ToolsBot currently has no equivalent Discord readiness
-telemetry: its process checks alone do not prove Discord connectivity.
+activation. ToolsBot also requires fresh Discord readiness from its existing
+memory telemetry snapshot, bound to that new process PID and deployment receipt.
 
 Repository dispatch no longer deploys unpushed dependency changes. Platform
 updates must be reviewed, committed and pushed first. Rollbacks follow the same
@@ -27,4 +26,8 @@ write production files can bypass them. Strong enforcement requires separate
 deployment identities, filesystem permissions and protected repository settings;
 none of those access or credential changes were made here.
 
-The exact Transformers default-dtype advisory is a known non-error stderr line and remains in the log; every other new nonempty stderr line still fails verification.
+The exact Transformers default-dtype advisory remains in the log. A previously
+failing battle destination's strictly validated Unknown Guild warning also stays
+visible and pending, with a separate runner report; its hash must be present in
+the pre-activation log baseline. New destinations, transient failures, malformed
+warnings and every other new nonempty stderr line still fail verification.

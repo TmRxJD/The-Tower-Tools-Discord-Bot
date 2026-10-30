@@ -28,7 +28,8 @@ import {
 } from '@tmrxjd/platform/tools';
 import { getBotConfig } from '../config/bot-config';
 import { brandCommandEmbed } from '../services/command-embed-branding';
-import { appendShareButtonRow, shareCurrentRender } from '../services/command-share';
+import { appendShareButtonRow, createShareButtonRow, shareCurrentRender } from '../services/command-share';
+import { LabTaskDiagnostics } from '../services/lab-task-diagnostics';
 import { getUserLabSettings, reconcileUserLabSettings, saveUserLabSettings, type UserLabSettings } from '../services/user-lab-db';
 import { renderTableChartPng } from '../services/table-chart-render';
 import { showModalAndAwaitSubmit } from '../services/modal-submit';
@@ -385,6 +386,11 @@ export const labCommand: CommandModule = {
 
       rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons));
 
+      // The UW category/type/lab/speedup selectors already consume four rows.
+      if (rows.length === 5) {
+        rows[4].addComponents(createShareButtonRow(LAB_SHARE_BUTTON_ID, !(selectedCategory && selectedLab)).components[0]);
+        return rows;
+      }
       return appendShareButtonRow(rows, LAB_SHARE_BUTTON_ID, !(selectedCategory && selectedLab));
     };
 
@@ -432,24 +438,26 @@ export const labCommand: CommandModule = {
       ttlMs: labConfig.behavior.collectorTimeoutMs,
     });
 
-    const refreshReply = async (componentInteraction?: MessageComponentInteraction) => {
+    const acknowledge = (component: MessageComponentInteraction | import('discord.js').ModalSubmitInteraction, diagnostics: LabTaskDiagnostics) => {
+      diagnostics.useInteraction(component);
+      return diagnostics.run('acknowledge', () => deferCollectorUpdate(component), { method: 'POST', route: 'interaction-callback' });
+    };
+    const persistSettings = (diagnostics: LabTaskDiagnostics) => diagnostics.run('persist', () => saveUserLabSettings(storageUserId, settings, cloudContext));
+    const refreshReply = async (componentInteraction: MessageComponentInteraction | undefined, diagnostics: LabTaskDiagnostics) => {
       if (componentInteraction && !componentInteraction.deferred && !componentInteraction.replied) {
-        await deferCollectorUpdate(componentInteraction);
+        await acknowledge(componentInteraction, diagnostics);
       }
 
-      const nextAttachment = await buildAttachment();
-      const hasChartImage = nextAttachment !== null;
-      const payload = {
-        embeds: [buildEmbed(hasChartImage)],
-        components: buildComponents(),
-        files: nextAttachment ? [nextAttachment] : [],
-      };
-
-      await interaction.editReply(payload);
+      const payload = await diagnostics.run('render', async () => {
+        const nextAttachment = await buildAttachment();
+        return { embeds: [buildEmbed(nextAttachment !== null)], components: buildComponents(), files: nextAttachment ? [nextAttachment] : [] };
+      });
+      await diagnostics.run('edit-response', () => interaction.editReply(payload), { method: 'PATCH', route: 'original-response', payload });
     };
 
+    const cloudDiagnostics = new LabTaskDiagnostics(interaction, 'reconcile', scopedSessionId);
     void runCollectorTask('Lab cloud reconciliation', async () => {
-      const reconcile = await reconcileUserLabSettings(storageUserId, cloudContext);
+      const reconcile = await cloudDiagnostics.run('reconcile', () => reconcileUserLabSettings(storageUserId, cloudContext));
       await runCloudReconcileUi<UserLabSettings>({
         interaction,
         promptKey: 'lab-sync',
@@ -462,19 +470,19 @@ export const labCommand: CommandModule = {
         applyLocalToCloud: reconcile.applyLocalToCloud,
         onCloudApplied: async (next) => {
           settings = next;
-          await refreshReply();
+          await refreshReply(undefined, cloudDiagnostics);
         },
       });
-    });
+    }, cloudDiagnostics);
 
-    const handleComponentInteraction = async (componentInteraction: MessageComponentInteraction) => {
+    const handleComponentInteraction = async (componentInteraction: MessageComponentInteraction, diagnostics: LabTaskDiagnostics) => {
       if (componentInteraction.user.id !== interaction.user.id) {
         await componentInteraction.reply({ content: labConfig.ui.notYourSession, ephemeral: true });
         return;
       }
 
       if (componentInteraction.isButton() && componentInteraction.customId === LAB_SHARE_BUTTON_ID) {
-        await shareCurrentRender(componentInteraction, {
+        await diagnostics.run('share', () => shareCurrentRender(componentInteraction, {
           commandName: labConfig.name,
           render: async () => {
             const attachment = await buildAttachment();
@@ -483,19 +491,20 @@ export const labCommand: CommandModule = {
               files: attachment ? [attachment] : [],
             };
           },
-        });
+        }));
         return;
       }
 
       if (componentInteraction.customId === ids.close) {
-        await componentInteraction.update({ content: labConfig.ui.closed, embeds: [], components: [] });
+        const payload = { content: labConfig.ui.closed, embeds: [], components: [] };
+        await diagnostics.run('close-response', () => componentInteraction.update(payload), { method: 'POST', route: 'interaction-callback', payload });
         collector.stop();
         return;
       }
 
       // Acknowledge selections before local/cloud saves or chart rendering can consume the deadline.
       if (componentInteraction.isStringSelectMenu() || componentInteraction.customId === ids.toggleHideMaxed) {
-        await deferCollectorUpdate(componentInteraction);
+        await acknowledge(componentInteraction, diagnostics);
       }
 
       if (componentInteraction.customId === ids.toggleHideMaxed) {
@@ -505,8 +514,8 @@ export const labCommand: CommandModule = {
           const lab = getLabByKey(selectedLab);
           if (!lab) {
             selectedLab = null;
-            await saveUserLabSettings(storageUserId, settings, cloudContext);
-            await refreshReply(componentInteraction);
+            await persistSettings(diagnostics);
+            await refreshReply(componentInteraction, diagnostics);
             return;
           }
           const maxLevel = getLabMaxLevel(lab);
@@ -516,8 +525,8 @@ export const labCommand: CommandModule = {
           }
         }
 
-        await saveUserLabSettings(storageUserId, settings, cloudContext);
-        await refreshReply(componentInteraction);
+        await persistSettings(diagnostics);
+        await refreshReply(componentInteraction, diagnostics);
         return;
       }
 
@@ -552,24 +561,24 @@ export const labCommand: CommandModule = {
             ),
           );
 
-        const submitted = await showModalAndAwaitSubmit({
+        const submitted = await diagnostics.run('modal-wait', () => showModalAndAwaitSubmit({
           componentInteraction,
           modal,
           baseCustomId: ids.settingsModal,
           userId: componentInteraction.user.id,
           timeoutMs: labConfig.behavior.modalSubmitTimeoutMs,
-        });
+        }), { method: 'POST', route: 'interaction-callback', payload: { components: modal.components } });
         if (!submitted) {
           return;
         }
-        await deferCollectorUpdate(submitted);
+        await acknowledge(submitted, diagnostics);
 
         settings.labSpeed = Math.max(0, Math.floor(Number(submitted.fields.getTextInputValue(ids.settingsLabSpeed)) || 0));
         settings.labRelic = Math.max(0, Number(submitted.fields.getTextInputValue(ids.settingsLabRelic)) || 0);
         settings.labDiscount = Math.max(0, Math.floor(Number(submitted.fields.getTextInputValue(ids.settingsLabDiscount)) || 0));
 
-        await saveUserLabSettings(storageUserId, settings, cloudContext);
-        await refreshReply();
+        await persistSettings(diagnostics);
+        await refreshReply(undefined, diagnostics);
         return;
       }
 
@@ -577,8 +586,8 @@ export const labCommand: CommandModule = {
         const lab = getLabByKey(selectedLab);
         if (!lab) {
           selectedLab = null;
-          await deferCollectorUpdate(componentInteraction);
-          await refreshReply();
+          await acknowledge(componentInteraction, diagnostics);
+          await refreshReply(undefined, diagnostics);
           return;
         }
         const maxLevel = getLabMaxLevel(lab);
@@ -606,17 +615,17 @@ export const labCommand: CommandModule = {
             ),
           );
 
-        const submitted = await showModalAndAwaitSubmit({
+        const submitted = await diagnostics.run('modal-wait', () => showModalAndAwaitSubmit({
           componentInteraction,
           modal,
           baseCustomId: ids.rangeModal,
           userId: componentInteraction.user.id,
           timeoutMs: labConfig.behavior.modalSubmitTimeoutMs,
-        });
+        }), { method: 'POST', route: 'interaction-callback', payload: { components: modal.components } });
         if (!submitted) {
           return;
         }
-        await deferCollectorUpdate(submitted);
+        await acknowledge(submitted, diagnostics);
 
         const startValue = Number(submitted.fields.getTextInputValue(ids.rangeStartLevel)) || 0;
         const targetValue = Number(submitted.fields.getTextInputValue(ids.rangeTargetLevel)) || 0;
@@ -626,8 +635,8 @@ export const labCommand: CommandModule = {
           selectedLab = null;
         }
 
-        await saveUserLabSettings(storageUserId, settings, cloudContext);
-        await refreshReply();
+        await persistSettings(diagnostics);
+        await refreshReply(undefined, diagnostics);
         return;
       }
 
@@ -635,14 +644,14 @@ export const labCommand: CommandModule = {
         selectedCategory = componentInteraction.values[0] === 'none' ? null : componentInteraction.values[0];
         selectedLab = null;
         selectedUWType = null;
-        await refreshReply(componentInteraction);
+        await refreshReply(componentInteraction, diagnostics);
         return;
       }
 
       if (componentInteraction.customId === ids.uwType && componentInteraction.isStringSelectMenu()) {
         selectedUWType = componentInteraction.values[0] === 'none' ? null : componentInteraction.values[0];
         selectedLab = null;
-        await refreshReply(componentInteraction);
+        await refreshReply(componentInteraction, diagnostics);
         return;
       }
 
@@ -655,39 +664,41 @@ export const labCommand: CommandModule = {
           const maxLevel = getLabMaxLevel(lab);
           const existing = settings.labLevels[selectedLab] ?? { startLevel: 0, targetLevel: Math.min(30, maxLevel) };
           settings.labLevels[selectedLab] = clampLabRange(lab, existing.startLevel, existing.targetLevel);
-          await saveUserLabSettings(storageUserId, settings, cloudContext);
+          await persistSettings(diagnostics);
         }
 
-        await refreshReply(componentInteraction);
+        await refreshReply(componentInteraction, diagnostics);
         return;
       }
 
       if (componentInteraction.customId === ids.speedup && componentInteraction.isStringSelectMenu()) {
         settings.speedUp = Math.max(1, Math.min(8, Number(componentInteraction.values[0]) || 1));
-        await saveUserLabSettings(storageUserId, settings, cloudContext);
-        await refreshReply(componentInteraction);
+        await persistSettings(diagnostics);
+        await refreshReply(componentInteraction, diagnostics);
         return;
       }
 
-      await deferCollectorUpdate(componentInteraction);
+      await acknowledge(componentInteraction, diagnostics);
     };
     collector.on('collect', componentInteraction => {
-      void runCollectorTask('Lab component', () => handleComponentInteraction(componentInteraction));
+      const action = componentInteraction.customId === LAB_SHARE_BUTTON_ID ? 'share' : Object.entries(ids).find(([, id]) => id === componentInteraction.customId)?.[0] ?? 'unknown';
+      const diagnostics = new LabTaskDiagnostics(componentInteraction, action, scopedSessionId);
+      void runCollectorTask('Lab component', () => handleComponentInteraction(componentInteraction, diagnostics), diagnostics);
     });
 
     collector.on('end', () => {
       client.scopedInteractionSessions.unregister(scopedSessionId);
+      const diagnostics = new LabTaskDiagnostics(interaction, 'cleanup', scopedSessionId);
       void runCollectorTask('Lab session cleanup', async () => {
-        const disabledRows = buildComponents().map(row => {
-          row.components.forEach(component => component.setDisabled(true));
-          return row;
+        const payload = await diagnostics.run('cleanup-build', async () => {
+          const components = buildComponents().map(row => {
+            row.components.forEach(component => component.setDisabled(true));
+            return row;
+          });
+          return { embeds: [buildEmbed().setFooter({ text: labConfig.ui.sessionEnded })], components };
         });
-
-        await cleanupEphemeralSession(interaction.createdTimestamp, () => interaction.editReply({
-          embeds: [buildEmbed().setFooter({ text: labConfig.ui.sessionEnded })],
-          components: disabledRows,
-        }));
-      });
+        await cleanupEphemeralSession(interaction.createdTimestamp, () => diagnostics.run('cleanup-edit', () => interaction.editReply(payload), { method: 'PATCH', route: 'original-response', payload }));
+      }, diagnostics);
     });
   },
 };

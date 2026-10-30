@@ -2,6 +2,8 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    // The self-hosted runner shares Windows resources with the live bots.
+    maxWorkers: 4,
     include: ['src/**/*.test.ts'],
     exclude: ['dist/**', 'node_modules/**'],
     env: {

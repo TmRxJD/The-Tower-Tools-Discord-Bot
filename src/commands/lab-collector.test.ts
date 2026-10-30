@@ -10,7 +10,6 @@ vi.mock('../services/user-lab-db', () => ({
 vi.mock('../services/user-storage-resolution', () => ({ resolveUserStorageState: mocks.resolve }));
 vi.mock('../services/cloud-reconcile-ui', () => ({ runCloudReconcileUi: vi.fn() }));
 vi.mock('../services/table-chart-render', () => ({ renderTableChartPng: vi.fn() }));
-vi.mock('../services/command-share', () => ({ appendShareButtonRow: (rows: unknown) => rows, shareCurrentRender: vi.fn() }));
 import { labCommand } from './lab';
 import { getBotConfig } from '../config/bot-config';
 
@@ -27,7 +26,7 @@ async function session() {
   const collector = new EventEmitter();
   const unregister = vi.fn();
   const interaction = {
-    id: 'synthetic', createdTimestamp: Date.now(), isChatInputCommand: () => true, user: { id: 'synthetic', username: 'synthetic' },
+    id: 'synthetic', deferred: true, replied: true, createdTimestamp: Date.now(), isChatInputCommand: () => true, user: { id: 'synthetic', username: 'synthetic' },
     deferReply: vi.fn().mockResolvedValue(undefined), editReply: vi.fn().mockResolvedValue(undefined),
     fetchReply: vi.fn().mockResolvedValue({ id: 'synthetic', createMessageComponentCollector: vi.fn((options: { time: number }) => { void options; return collector; }) }),
     client: { scopedInteractionSessions: { register: vi.fn(), unregister } },
@@ -39,7 +38,7 @@ async function session() {
 it.each([10062, 'ECONNRESET', 50035])('contains actual selector callback error %s before saving', async code => {
   const { collector, interaction, unregister } = await session();
   const component = {
-    user: { id: 'synthetic' }, customId: getBotConfig().commands.lab.ids.speedup, values: ['2'],
+    id: 'synthetic-component', createdTimestamp: Date.now(), user: { id: 'synthetic' }, customId: getBotConfig().commands.lab.ids.speedup, values: ['2'],
     isButton: () => false, isStringSelectMenu: () => true, deferred: false, replied: false,
     deferUpdate: vi.fn().mockRejectedValue(Object.assign(new Error('synthetic failure'), { code })),
   };

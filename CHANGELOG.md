@@ -1,3 +1,9 @@
+## 2026-10-30 - Lab component layout and validation diagnostics
+
+- Keep Ultimate Weapon lab messages within Discord's five-row limit by placing Share in the existing control row only when necessary. Preserve every control, label and other valid layout, including disabled cleanup after failed refreshes.
+- Record bounded redacted Discord validation paths/codes, lab action/stage/route, hashed correlations, acknowledgement state, stage timing and structural counts without raw payloads or message contents.
+- Exercise actual lab handlers, Share builders and webhook serialization across all 211 reachable selections, refreshes, modal submissions, toggles, speedup, cleanup and PNG attachments with Discord writes blocked.
+
 ## 2026-10-27 - Interaction and settings reliability
 
 - Use one database with two user-keyed collections, avoiding collection exhaustion as new users access settings. Close incomplete initialization before retrying the same database name.

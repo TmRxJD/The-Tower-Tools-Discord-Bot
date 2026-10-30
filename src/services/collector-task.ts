@@ -25,6 +25,7 @@ export async function deferCollectorUpdate(interaction: UpdateInteraction): Prom
 export async function runCollectorTask(label: string, task: () => Promise<unknown>, context?: {
   interaction: () => { id: string; createdTimestamp: number; deferred: boolean; replied: boolean };
   stage: () => string;
+  details?: () => Record<string, unknown>;
 }): Promise<void> {
   const startedAt = Date.now();
   try {
@@ -39,6 +40,7 @@ export async function runCollectorTask(label: string, task: () => Promise<unknow
       pid: process.pid,
       durationMs: Date.now() - startedAt,
       outcome: terminal ? 'acknowledgement-unavailable' : 'failed',
+      ...context?.details?.(),
       ...(context && interaction ? { correlation: diagnosticRef(interaction.id), stage: context.stage(),
         ageMs: Date.now() - interaction.createdTimestamp,
         deferred: interaction.deferred, replied: interaction.replied } : {}),
