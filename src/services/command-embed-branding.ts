@@ -16,7 +16,7 @@ const COMMAND_ROUTE_MAP: Record<string, string> = {
 }
 
 function getSiteBaseUrl(): string {
-  const configured = getBotConfig().common.toolsHub.siteUrl || 'https://www.the-tower-run-tracker.com'
+  const configured = getBotConfig().common.toolsHub.siteUrl || 'https://the-tower-run-tracker.com'
   return configured.endsWith('/') ? configured.slice(0, -1) : configured
 }
 

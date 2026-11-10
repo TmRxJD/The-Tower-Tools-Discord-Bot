@@ -1,3 +1,8 @@
+## 2026-11-10 - Tools Hub links
+
+- Use the working non-www website origin for every Tools Hub link and command embed URL. Keep the shared catalog paths and guild-specific feedback destinations unchanged.
+- Cover all 33 browser-linked tools, both feedback destinations, the hub title link and command branding with URL regression tests.
+
 ## 2026-10-30 - Lab component layout and validation diagnostics
 
 - Keep Ultimate Weapon lab messages within Discord's five-row limit by placing Share in the existing control row only when necessary. Preserve every control, label and other valid layout, including disabled cleanup after failed refreshes.

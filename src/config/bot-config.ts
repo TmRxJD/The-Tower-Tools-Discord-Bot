@@ -12,7 +12,7 @@ export const defaultBotConfig = {
     toolsHub: {
       title: "JD's Tools Hub",
       footer: 'To use this command type /tools',
-      siteUrl: 'https://www.the-tower-run-tracker.com',
+      siteUrl: 'https://the-tower-run-tracker.com',
       toolsPath: '/tools',
       embedColor: '#00bfff',
     },
